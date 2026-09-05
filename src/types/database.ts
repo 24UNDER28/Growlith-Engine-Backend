@@ -75,6 +75,7 @@ export interface Database {
           after?: Json | null;
           reason?: string | null;
         };
+        Relationships: [];
       };
       comments: {
         Row: {
@@ -131,6 +132,7 @@ export interface Database {
           deleted_at?: string | null;
           deleted_by?: string | null;
         };
+        Relationships: [];
       };
       deliverable_versions: {
         Row: {
@@ -178,6 +180,7 @@ export interface Database {
           review_notes?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       deliverables: {
         Row: {
@@ -249,6 +252,7 @@ export interface Database {
           deleted_at?: string | null;
           deleted_by?: string | null;
         };
+        Relationships: [];
       };
       engagements: {
         Row: {
@@ -320,6 +324,7 @@ export interface Database {
           deleted_at?: string | null;
           deleted_by?: string | null;
         };
+        Relationships: [];
       };
       files: {
         Row: {
@@ -403,6 +408,7 @@ export interface Database {
           deleted_at?: string | null;
           deleted_by?: string | null;
         };
+        Relationships: [];
       };
       invitations: {
         Row: {
@@ -465,6 +471,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       metrics: {
         Row: {
@@ -515,6 +522,7 @@ export interface Database {
           created_at?: string;
           created_by?: string | null;
         };
+        Relationships: [];
       };
       notifications: {
         Row: {
@@ -562,6 +570,7 @@ export interface Database {
           archived_at?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       organization_memberships: {
         Row: {
@@ -615,6 +624,7 @@ export interface Database {
           deleted_at?: string | null;
           deleted_by?: string | null;
         };
+        Relationships: [];
       };
       organization_settings: {
         Row: {
@@ -656,6 +666,7 @@ export interface Database {
           updated_at?: string;
           updated_by?: string | null;
         };
+        Relationships: [];
       };
       organizations: {
         Row: {
@@ -718,6 +729,7 @@ export interface Database {
           deleted_at?: string | null;
           deleted_by?: string | null;
         };
+        Relationships: [];
       };
       platform_role_grants: {
         Row: {
@@ -762,6 +774,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       profiles: {
         Row: {
@@ -824,6 +837,7 @@ export interface Database {
           deleted_at?: string | null;
           deleted_by?: string | null;
         };
+        Relationships: [];
       };
       project_memberships: {
         Row: {
@@ -871,6 +885,7 @@ export interface Database {
           deleted_at?: string | null;
           deleted_by?: string | null;
         };
+        Relationships: [];
       };
       projects: {
         Row: {
@@ -942,6 +957,7 @@ export interface Database {
           deleted_at?: string | null;
           deleted_by?: string | null;
         };
+        Relationships: [];
       };
       report_metrics: {
         Row: {
@@ -983,6 +999,7 @@ export interface Database {
           sort_order?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
       reports: {
         Row: {
@@ -1051,6 +1068,7 @@ export interface Database {
           deleted_at?: string | null;
           deleted_by?: string | null;
         };
+        Relationships: [];
       };
       service_lines: {
         Row: {
@@ -1083,6 +1101,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       services: {
         Row: {
@@ -1151,6 +1170,7 @@ export interface Database {
           deleted_at?: string | null;
           deleted_by?: string | null;
         };
+        Relationships: [];
       };
       staff_team_memberships: {
         Row: {
@@ -1192,6 +1212,7 @@ export interface Database {
           deleted_at?: string | null;
           deleted_by?: string | null;
         };
+        Relationships: [];
       };
       status_transitions: {
         Row: {
@@ -1224,6 +1245,7 @@ export interface Database {
           description?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       tasks: {
         Row: {
@@ -1301,6 +1323,7 @@ export interface Database {
           deleted_at?: string | null;
           deleted_by?: string | null;
         };
+        Relationships: [];
       };
       teams: {
         Row: {
@@ -1333,10 +1356,19 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
     };
     Views: Record<string, never>;
     Functions: {
+      accept_invitation: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      auth_context: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
       auth_platform_role: {
         Args: Record<string, unknown>;
         Returns: unknown;
@@ -1385,6 +1417,10 @@ export interface Database {
         Args: Record<string, unknown>;
         Returns: unknown;
       };
+      touch_last_seen: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
     };
     Enums: {
       account_status: 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
@@ -1403,7 +1439,12 @@ export interface Database {
         | 'INVITE_ACCEPTED'
         | 'PERMISSION_DENIED'
         | 'EXPORT'
-        | 'FILE_DOWNLOAD';
+        | 'FILE_DOWNLOAD'
+        | 'LOGOUT'
+        | 'PASSWORD_RESET_REQUESTED'
+        | 'MFA_ENROLLED'
+        | 'MFA_REMOVED'
+        | 'SESSIONS_REVOKED';
       audit_severity: 'INFO' | 'NOTICE' | 'WARNING' | 'CRITICAL';
       currency_code: 'USD' | 'GBP' | 'EUR' | 'AED' | 'AUD';
       deliverable_status:
@@ -1439,7 +1480,8 @@ export interface Database {
         | 'comment'
         | 'attachment'
         | 'metric'
-        | 'notification';
+        | 'notification'
+        | 'profile';
       fee_model: 'RETAINER' | 'FIXED' | 'HOURLY' | 'PERFORMANCE';
       file_kind:
         | 'ATTACHMENT'

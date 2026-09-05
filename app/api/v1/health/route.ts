@@ -22,6 +22,9 @@ export const dynamic = 'force-dynamic';
 
 const GET = withRoute({
   method: 'GET',
+  // Public by definition: a liveness probe exists so infrastructure can ask
+  // "is the process up?" without authenticating (§15 taxonomy).
+  auth: 'public',
   summary: 'liveness probe',
   handler: async () => ({ status: 'ok' as const }),
 });

@@ -1,10 +1,11 @@
 import { z } from 'zod';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ErrorCode } from '@/lib/types/error-codes';
 import { REQUEST_ID_HEADER } from '@/lib/utils/request-id';
 import { ApiError } from '@/server/api/errors';
 import { MAX_JSON_BODY_BYTES, withRoute, type NextRouteContext } from '@/server/api/with-route';
+import { authContextFixture } from '../helpers/auth-fixtures';
 
 /**
  * Contract tests for the single API entry point.
@@ -14,12 +15,28 @@ import { MAX_JSON_BODY_BYTES, withRoute, type NextRouteContext } from '@/server/
  * the *guarantees* a consumer relies on — not the handler's own logic, which is
  * covered by service tests in later phases.
  *
- * Authentication and authorization are NOT tested here because they are not
- * implemented in Phase 1. Adding a passing test for a control that does not yet
- * exist would be worse than no test (Rule 14).
+ * Authentication and authorization: authorization (capabilities, Phase 4) is
+ * not implemented yet and adding a passing test for a control that does not
+ * exist would be worse than no test (Rule 14). AUTHENTICATION (Phase 3) is
+ * wired through the required `auth` field and asserted below with the auth
+ * authority mocked; the authority's own behaviour matrix (401/403/423/503 per
+ * account status) lives in `tests/contract/auth-context.spec.ts`.
  */
 
 const VALID_UUID = '3f2b8c1a-9d4e-4a7b-8c2f-1e6d5b4a3920';
+
+// The auth authority is mocked so the WRAPPER's wiring is what is under test:
+// that it consults the authority exactly when the route declares 'required',
+// that the handler receives the resolved principal, and that the authority's
+// rejections surface as envelopes. The authority's own matrix is tested
+// against faked Supabase clients in auth-context.spec.ts.
+const { requireAuthContextMock } = vi.hoisted(() => ({
+  requireAuthContextMock: vi.fn(),
+}));
+
+vi.mock('@/server/auth/context', () => ({
+  requireAuthContext: (...args: unknown[]) => requireAuthContextMock(...args),
+}));
 
 let originalLogLevel: string | undefined;
 
@@ -57,6 +74,7 @@ describe('successful responses', () => {
   const route = withRoute({
     method: 'GET',
     summary: 'return a greeting',
+    auth: 'public',
     handler: async () => ({ greeting: 'hello' }),
   });
 
@@ -108,6 +126,7 @@ describe('successful responses', () => {
     const created = withRoute({
       method: 'POST',
       summary: 'create a thing',
+      auth: 'public',
       successStatus: 201,
       handler: async () => ({ id: 'new' }),
     });
@@ -122,6 +141,7 @@ describe('successful responses', () => {
     const deleted = withRoute({
       method: 'DELETE',
       summary: 'delete a thing',
+      auth: 'public',
       successStatus: 204,
       handler: async () => undefined,
     });
@@ -145,6 +165,7 @@ describe('declaration/export mismatch guard', () => {
   const route = withRoute({
     method: 'POST',
     summary: 'create a thing',
+    auth: 'public',
     handler: async () => ({ ok: true }),
   });
 
@@ -166,6 +187,7 @@ describe('body validation', () => {
 
   const route = withRoute<undefined, undefined, Body, { title: string }>({
     method: 'POST',
+    auth: 'public',
     summary: 'create a task',
     bodySchema: schema,
     handler: async ({ body }) => ({ title: body.title }),
@@ -312,6 +334,7 @@ describe('query and parameter validation', () => {
       { limit: number | undefined }
     >({
       method: 'GET',
+      auth: 'public',
       summary: 'list things',
       querySchema: schema,
       handler: async ({ query }) => ({ limit: query.limit }),
@@ -331,6 +354,7 @@ describe('query and parameter validation', () => {
     const schema = z.object({ orgId: z.uuid() }).strict();
     const route = withRoute<z.infer<typeof schema>, undefined, undefined, { orgId: string }>({
       method: 'GET',
+      auth: 'public',
       summary: 'read one organization',
       paramSchema: schema,
       handler: async ({ params }) => ({ orgId: params.orgId }),
@@ -357,6 +381,7 @@ describe('error mapping', () => {
     const route = withRoute({
       method: 'GET',
       summary: 'fail with a domain error',
+      auth: 'public',
       handler: async () => {
         throw ApiError.conflict('That code is already in use.');
       },
@@ -377,6 +402,7 @@ describe('error mapping', () => {
     const route = withRoute({
       method: 'GET',
       summary: 'fail unexpectedly',
+      auth: 'public',
       handler: async () => {
         throw new Error('relation "public.deliverables" does not exist');
       },
@@ -396,6 +422,7 @@ describe('error mapping', () => {
     const route = withRoute({
       method: 'GET',
       summary: 'fail unexpectedly',
+      auth: 'public',
       handler: async () => {
         throw new Error('boom');
       },
@@ -415,6 +442,7 @@ describe('error mapping', () => {
     const route = withRoute({
       method: 'GET',
       summary: 'throw a string',
+      auth: 'public',
       handler: async () => {
         // Deliberately pathological: a non-Error throwable must still be mapped
         // to a generic 500 rather than escaping to the caller.
@@ -424,5 +452,81 @@ describe('error mapping', () => {
 
     const response = await route(new Request('http://localhost/api/v1/thing'));
     expect(response.status).toBe(500);
+  });
+});
+
+describe('authentication step (Phase 3)', () => {
+  it('resolves the principal for required routes and hands it to the handler', async () => {
+    const context = authContextFixture();
+    requireAuthContextMock.mockResolvedValueOnce(context);
+
+    let received: unknown = 'not called';
+    const route = withRoute({
+      method: 'GET',
+      auth: 'required',
+      summary: 'a protected read',
+      handler: async (ctx) => {
+        received = ctx.auth;
+        return { ok: true };
+      },
+    });
+
+    const response = await route(new Request('http://localhost/api/v1/thing'));
+    expect(response.status).toBe(200);
+    expect(requireAuthContextMock).toHaveBeenCalledTimes(1);
+    expect(received).toBe(context);
+  });
+
+  it('surfaces an authority rejection as the error envelope without running the handler', async () => {
+    requireAuthContextMock.mockRejectedValueOnce(ApiError.accountSuspended());
+
+    let handlerRan = false;
+    const route = withRoute({
+      method: 'GET',
+      auth: 'required',
+      summary: 'a protected read',
+      handler: async () => {
+        handlerRan = true;
+      },
+    });
+
+    const response = await route(new Request('http://localhost/api/v1/thing'));
+    const body = await readJson(response);
+
+    expect(response.status).toBe(423);
+    expect((body.error as { code: string }).code).toBe(ErrorCode.AccountSuspended);
+    expect(handlerRan).toBe(false);
+  });
+
+  it('never consults the authority for public routes', async () => {
+    const route = withRoute({
+      method: 'GET',
+      auth: 'public',
+      summary: 'an open read',
+      handler: async () => ({ ok: true }),
+    });
+
+    const response = await route(new Request('http://localhost/api/v1/thing'));
+    expect(response.status).toBe(200);
+    expect(requireAuthContextMock).not.toHaveBeenCalled();
+  });
+
+  it('authenticates after validation: an invalid body on a required route rejects before resolving', async () => {
+    requireAuthContextMock.mockResolvedValueOnce(authContextFixture());
+
+    const route = withRoute({
+      method: 'POST',
+      auth: 'required',
+      summary: 'a protected write',
+      bodySchema: z.object({ name: z.string().min(1) }).strict(),
+      handler: async () => ({ ok: true }),
+    });
+
+    const response = await route(
+      jsonRequest('POST', 'http://localhost/api/v1/thing', { name: '' }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(requireAuthContextMock).not.toHaveBeenCalled();
   });
 });

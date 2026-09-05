@@ -49,7 +49,19 @@ function enumValues(sql: string, typeName: string): string[] {
   if (match?.[1] === undefined) {
     throw new Error(`enum public.${typeName} not found in the migrations`);
   }
-  return [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1] as string);
+  const values = [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1] as string);
+
+  // Additive values from later migrations (`alter type ... add value`), in
+  // migration order — PostgreSQL appends them after the value list, which is
+  // exactly how ENTITY_KINDS and friends mirror the vocabulary. Introduced by
+  // the Phase 3 auth migrations; the same rule applies to any future addition.
+  const alterations = [
+    ...sql.matchAll(
+      new RegExp(`alter\\s+type\\s+public\\.${typeName}\\s+add\\s+value\\s+'([^']+)'`, 'gi'),
+    ),
+  ].map((m) => m[1] as string);
+
+  return [...values, ...alterations];
 }
 
 describe('migration files', () => {

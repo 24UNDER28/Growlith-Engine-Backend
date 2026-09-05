@@ -14,8 +14,31 @@ export const ErrorCode = {
   MalformedRequest: 'MALFORMED_REQUEST',
   /** Body/query/params parsed but failed schema validation. */
   ValidationFailed: 'VALIDATION_FAILED',
-  /** No valid session, or the session could not be verified. */
+  /**
+   * No valid session, or the session could not be verified.
+   *
+   * Status-gate variants below (`ACCOUNT_DEACTIVATED`, `MFA_REQUIRED`) reuse
+   * 401/403-family semantics but name the account-holder-facing cause; they
+   * face a person who is entitled to know their own account state and reveal
+   * nothing about *other* addresses (design §3 rationale).
+   */
   Unauthenticated: 'UNAUTHENTICATED',
+  /**
+   * Credentials did not verify. Deliberately identical for unknown email and
+   * wrong password so the endpoint cannot be used to enumerate addresses.
+   */
+  InvalidCredentials: 'INVALID_CREDENTIALS',
+  /** The account exists but is offboarded; authentication is refused. */
+  AccountDeactivated: 'ACCOUNT_DEACTIVATED',
+  /** The account accepted neither the invitation nor anything else yet. */
+  InvitationPending: 'INVITATION_PENDING',
+  /** A session exists but the surface requires the second authenticator. */
+  MfaRequired: 'MFA_REQUIRED',
+  /**
+   * An invitation link is invalid, expired, revoked or already consumed.
+   * Carries no indication of which: link states stay neutral (design §12).
+   */
+  InvitationInvalid: 'INVITATION_INVALID',
   /** Authenticated, but not permitted to perform this operation. */
   Forbidden: 'FORBIDDEN',
   /**
