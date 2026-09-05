@@ -2,7 +2,7 @@
   "name": "growlith-engine-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Growlith Academy portal — admin and client dashboards plus the server-side API that backs them. Next.js, TypeScript, Supabase (PostgreSQL, Auth, Storage) with PostgreSQL RLS as the final authorization boundary.",
+  "description": "Growlith Academy portal \u2014 admin and client dashboards plus the server-side API that backs them. Next.js, TypeScript, Supabase (PostgreSQL, Auth, Storage) with PostgreSQL RLS as the final authorization boundary.",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=22.0.0",
@@ -22,6 +22,13 @@
     "test:watch": "vitest",
     "check:client-exposure": "node scripts/check-client-exposure.mjs",
     "db:types": "supabase gen types typescript --local --schema public > src/types/database.ts",
+    "db:types:pg": "node scripts/db-types.mjs",
+    "db:types:check": "node scripts/db-types.mjs --check",
+    "db:reset": "node scripts/db-reset-local.mjs",
+    "db:apply": "node scripts/db-apply.mjs",
+    "db:seed": "node scripts/db-seed.mjs",
+    "db:verify": "node scripts/db-verify.mjs",
+    "db:check": "npm run db:reset && npm run db:apply && npm run db:seed && npm run db:verify && npm run db:types:check",
     "validate": "npm run typecheck && npm run lint && npm run test && npm run build && npm run check:client-exposure"
   },
   "dependencies": {
@@ -35,10 +42,12 @@
   },
   "devDependencies": {
     "@types/node": "22.19.1",
+    "@types/pg": "8.23.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.4",
+    "pg": "8.23.0",
     "prettier": "3.9.6",
     "typescript": "5.9.3",
     "vitest": "5.0.0"

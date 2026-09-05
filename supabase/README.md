@@ -1,18 +1,43 @@
 # Supabase
 
-Empty in Phase 1 by design: the schema does not exist yet, and inventing
-migrations before the architecture was settled would have guaranteed rework.
-Phase 2 populates this directory.
+Phase 2 populated this directory: 24 migrations creating 23 tables, 36 enums,
+104 foreign keys and 312 indexes, with RLS enabled and forced on every relation.
+See [`docs/architecture/schema.md`](../docs/architecture/schema.md) for the
+schema reference and the ADR register for the reasoning.
 
-## Planned layout
+## Layout
 
 ```
 supabase/
-├── config.toml        local stack: signup DISABLED, SMTP, storage limits, JWT expiry
-├── migrations/        forward-only, hand-written, numbered  YYYYMMDDHHMMSS_name.sql
+├── migrations/        forward-only, hand-written, YYYYMMDDHHMMSS_name.sql  (24 files)
 ├── seed.sql           synthetic local-dev data only — never production data (Rule 13)
-└── tests/             pgTAP suites: the executable proof of tenant isolation
+├── config.toml        local stack config                        ← Phase 3 (auth)
+└── tests/             pgTAP suites: the executable proof of RLS  ← Phase 4
 ```
+
+`config.toml` and `tests/` are still absent, and deliberately so. `config.toml`
+configures Auth (signup disabled, SMTP, JWT expiry) which Phase 2 does not
+implement. `tests/` proves RLS policies, and Phase 2 ships three
+reference-data policies rather than the tenant policy set — a pgTAP suite
+asserting "the default-deny state denies" would be theatre.
+
+## Applying the migrations
+
+Two paths, one file set.
+
+```bash
+# Canonical, on Supabase or the local stack (needs Docker):
+supabase db push
+
+# Docker-free, against any PostgreSQL 15+:
+export DATABASE_URL='postgresql://…'
+npm run db:apply       # transactional, checksum-ledgered, skips applied files
+npm run db:check       # reset · apply · seed · verify · type-drift check
+```
+
+`scripts/db-apply.mjs` records a SHA-256 of each applied file and **refuses to
+proceed if an already-applied migration has changed**. Forward-only is enforced,
+not just documented.
 
 ## Migration conventions
 
@@ -41,10 +66,10 @@ review, because nothing consumed them and no code path ever could. Phase 2 adds
 them back in the same change that introduces the migration runner which reads
 them.
 
-| Variable                 | Used by                                       | Why                                                                                                                                                                                                                                                                                            |
-| ------------------------ | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SUPABASE_DB_URL_DIRECT` | `supabase db push`, CI migrations, pgTAP runs | Migrations execute DDL, which needs a **session-mode** connection. Supavisor's transaction mode cannot reliably carry `CREATE TABLE`, `ALTER TYPE`, advisory locks or `SET` — a prepared statement or session setting can land on a different backend part-way through a migration. Port 5432. |
-| `SUPABASE_DB_URL_POOLED` | nothing planned                               | Supavisor (port 6543) exists for serverless runtimes that would otherwise exhaust the connection limit. This application has no direct connection to pool, because every query goes through Supabase's API. Declaring it would advertise an architecture that does not exist.                  |
+| Variable                 | Used by                                                           | Why                                                                                                                                                                                                                                                                                            |
+| ------------------------ | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPABASE_DB_URL_DIRECT` | `supabase db push`, `scripts/db-*.mjs`, CI migrations, pgTAP runs | Migrations execute DDL, which needs a **session-mode** connection. Supavisor's transaction mode cannot reliably carry `CREATE TABLE`, `ALTER TYPE`, advisory locks or `SET` — a prepared statement or session setting can land on a different backend part-way through a migration. Port 5432. |
+| `SUPABASE_DB_URL_POOLED` | nothing planned                                                   | Supavisor (port 6543) exists for serverless runtimes that would otherwise exhaust the connection limit. This application has no direct connection to pool, because every query goes through Supabase's API. Declaring it would advertise an architecture that does not exist.                  |
 
 Both are **credentials**. Neither is ever prefixed `NEXT_PUBLIC_`, logged, or
 committed, and the `.env.example` placeholder convention (a visibly fake
@@ -58,6 +83,22 @@ connection would bypass RLS by accident rather than by decision, and would exhau
 the connection limit from serverless functions. If a future phase genuinely needs
 one, that is an ADR — not an environment variable.
 
+## Verification today
+
+Three layers, described in
+[ADR-0021](../docs/architecture/adr/ADR-0021-pgtap-is-the-proof-of-rls.md):
+
+| Layer                                  | Needs                 | Proves                                                                                                                                                                                                |
+| -------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/unit/schema.spec.ts` (42 tests) | nothing               | enum parity with `src/lib/domain/`, RLS declared on every table, composite FKs present, `search_path` pinned, no destructive DDL                                                                      |
+| `scripts/db-verify.mjs` (91 checks)    | a PostgreSQL          | structure **and behaviour**: cross-tenant writes rejected, tenant key derived and frozen, illegal transitions refused, append-only tables immutable, audit rows correct, internal columns not granted |
+| `supabase/tests/` pgTAP                | Docker + Supabase CLI | **outstanding** — the only layer that runs queries as a real role under a real JWT                                                                                                                    |
+
+Layer 2 earned its place during Phase 2 by catching two defects that inspection
+and layer 1 both missed: fourteen audit partitions with no row security
+(partitions do not inherit it), and 22 composite foreign keys whose single-column
+indexes did not satisfy them, turning every cascade into a sequential scan.
+
 ## Why the pgTAP suite is non-negotiable
 
 Row Level Security cannot be proven by a unit test. The only evidence that
@@ -70,7 +111,9 @@ audit immutability, RPC authorization, and Storage prefix isolation.
 
 These run in CI under Docker and locally via `supabase test db`.
 
-> **Risk R-3.** The Phase 1 sandbox had no Docker, no Supabase CLI, no
-> PostgreSQL and no network route to Supabase, so these policies could be
-> authored but not executed there. Until they have actually run, RLS is reported
-> as _authored, not executed_ — never as validated.
+> **Risk R-3 — still open.** The Phase 2 sandbox had PostgreSQL but no Docker,
+> so the migrations were applied and verified against a real PostgreSQL 18 while
+> the pgTAP suite could not be run. Phase 2's three policies cover global
+> reference data only, so there is no tenant policy to validate yet. When Phase 4
+> writes them, RLS stays reported as _authored, not executed_ until pgTAP has
+> actually run in CI.
