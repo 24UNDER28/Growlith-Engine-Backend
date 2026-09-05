@@ -260,6 +260,67 @@ async function verifyStructure(client) {
     `found ${parts[0].n}`,
   );
 
+  // --- Referential actions behave as declared ----------------------------
+  // A composite FK whose DELETE action is a bare SET NULL nulls every column
+  // of the key, including the NOT NULL, trigger-frozen tenant key. The action
+  // can therefore never succeed: the referential action aborts instead of
+  // detaching the child. Only a column-list SET NULL is reachable.
+  const { rows: bareSetNull } = await client.query(`
+    select c.relname || '.' || k.conname as fk
+    from pg_constraint k
+    join pg_class c on c.oid = k.conrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and k.contype = 'f'
+      and k.confdeltype = 'n'
+      and array_length(k.conkey, 1) > 1
+      and pg_get_constraintdef(k.oid) !~* 'set\\s+null\\s*\\('
+    order by 1
+  `);
+  check(
+    'no composite foreign key uses a bare SET NULL',
+    bareSetNull.length === 0,
+    bareSetNull.map((r) => r.fk).join(', '),
+  );
+
+  // The tenant root must never cascade. One DELETE on organizations would
+  // otherwise physically remove a client's files, metrics, reports, membership
+  // history and invitations, bypassing the soft-delete retention policy.
+  const { rows: cascadingOrgFks } = await client.query(`
+    select c.relname || '.' || k.conname as fk
+    from pg_constraint k
+    join pg_class c on c.oid = k.conrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and k.contype = 'f'
+      and k.confrelid = 'public.organizations'::regclass
+      and k.confdeltype = 'c'
+    order by 1
+  `);
+  check(
+    'no foreign key into organizations cascades',
+    cascadingOrgFks.length === 0,
+    cascadingOrgFks.map((r) => r.fk).join(', '),
+  );
+
+  // An audit event about a tenant-scoped entity that carries no
+  // organization_id is invisible to the per-organization audit view and to
+  // every Phase 4 RLS predicate. Role grants are global and correctly
+  // untagged; everything else must resolve to a tenant.
+  const { rows: untaggedAudit } = await client.query(`
+    select count(*)::int as n
+    from public.audit_events
+    where entity_kind in ('organization', 'engagement', 'service', 'project',
+                          'deliverable', 'task', 'comment', 'attachment')
+      and organization_id is null
+      and entity_id not in (select id from public.platform_role_grants)
+  `);
+  check(
+    'every audit event about a tenant entity is tagged with its tenant',
+    untaggedAudit[0].n === 0,
+    `${untaggedAudit[0].n} untagged`,
+  );
+
   // --- Internal-only columns are not granted to `authenticated` ----------
   for (const [table, column] of [
     ['engagements', 'contract_value'],
@@ -779,6 +840,115 @@ async function verifyBehaviour(client) {
     [orgA, svcA.id],
   );
   check('a code is reusable after soft delete', codeReuse.length === 1);
+
+  // --- Referential actions ------------------------------------------------
+  // The DELETE actions themselves have to work, not merely parse. A composite
+  // `on delete set null` that is not column-qualified nulls the tenant key
+  // too, and `growlith.freeze_organization_id()` aborts the statement — so the
+  // child is never detached and the delete never succeeds.
+
+  // A deliverable with a task but no versions, so nothing append-only is in
+  // the cascade path.
+  const { rows: delC } = await client.query(
+    `insert into public.deliverables (organization_id, project_id, title, deliverable_type)
+     values ($1, $2, 'Detach probe', 'REPORT') returning id`,
+    [orgB, projB.id],
+  );
+  const { rows: taskC } = await client.query(
+    `insert into public.tasks (organization_id, project_id, deliverable_id, title)
+     values ($1, $2, $3, 'Task to detach') returning id`,
+    [orgB, projB.id, delC[0].id],
+  );
+  await client.query(`delete from public.deliverables where id = $1`, [delC[0].id]);
+  const { rows: detachedTask } = await client.query(
+    `select organization_id, deliverable_id from public.tasks where id = $1`,
+    [taskC[0].id],
+  );
+  check(
+    'deleting a deliverable detaches its task instead of aborting',
+    detachedTask.length === 1 &&
+      detachedTask[0].deliverable_id === null &&
+      detachedTask[0].organization_id === orgB,
+    detachedTask.length === 0
+      ? 'task was destroyed'
+      : `organization_id=${detachedTask[0].organization_id}, deliverable_id=${detachedTask[0].deliverable_id}`,
+  );
+
+  // A service with a report and no other children.
+  const { rows: engC } = await client.query(
+    `insert into public.engagements
+       (organization_id, code, name, engagement_type, status, currency, start_date, signed_at)
+     values ($1, 'ENG-C', 'Detach probe', 'PROJECT', 'ACTIVE', 'USD', '2026-01-01', now())
+     returning id`,
+    [orgB],
+  );
+  const { rows: svcC } = await client.query(
+    `insert into public.services
+       (organization_id, engagement_id, service_line, delivering_team, name, currency, fee_model, start_date)
+     values ($1, $2, 'PROGRAMMATIC_SEO', 'SEO', 'Detach probe', 'USD', 'RETAINER', '2026-01-01')
+     returning id`,
+    [orgB, engC[0].id],
+  );
+  const { rows: reportC } = await client.query(
+    `insert into public.reports
+       (organization_id, service_id, title, report_type, period_start, period_end)
+     values ($1, $2, 'Issued report', 'PERFORMANCE', '2026-01-01', '2026-01-31')
+     returning id`,
+    [orgB, svcC[0].id],
+  );
+  await client.query(`delete from public.services where id = $1`, [svcC[0].id]);
+  const { rows: detachedReport } = await client.query(
+    `select organization_id, service_id from public.reports where id = $1`,
+    [reportC[0].id],
+  );
+  check(
+    'deleting a service detaches a report already issued to the client',
+    detachedReport.length === 1 &&
+      detachedReport[0].service_id === null &&
+      detachedReport[0].organization_id === orgB,
+    detachedReport.length === 0
+      ? 'report was destroyed'
+      : `organization_id=${detachedReport[0].organization_id}, service_id=${detachedReport[0].service_id}`,
+  );
+
+  // --- The tenant root never cascades -------------------------------------
+  const { rows: orgC } = await client.query(
+    `insert into public.organizations
+       (slug, legal_name, display_name, region, primary_currency, status)
+     values ('purge-probe', 'Purge Probe', 'Purge Probe', 'NYC', 'USD', 'ACTIVE')
+     returning id`,
+  );
+  await client.query(
+    `insert into public.files
+       (organization_id, storage_path, file_name, mime_type, size_bytes, uploaded_by)
+     values ($1, $2, 'contract.pdf', 'application/pdf', 1024, $3)`,
+    [orgC[0].id, `${orgC[0].id}/contract.pdf`, userA],
+  );
+  await expectFailure(
+    client,
+    'an organization with dependent evidence cannot be hard-deleted',
+    `delete from public.organizations where id = $1`,
+    [orgC[0].id],
+    'violates foreign key constraint',
+  );
+  const { rows: orgCFile } = await client.query(
+    `select count(*)::int as n from public.files where organization_id = $1`,
+    [orgC[0].id],
+  );
+  check('the evidence survived the refused delete', orgCFile[0].n === 1, `found ${orgCFile[0].n}`);
+
+  // An organization's own lifecycle must be reachable through the
+  // per-organization audit view, which filters on organization_id.
+  const { rows: orgCAudit } = await client.query(
+    `select count(*)::int as n from public.audit_events
+     where entity_kind = 'organization' and entity_id = $1 and organization_id = $1`,
+    [orgC[0].id],
+  );
+  check(
+    "an organization's own audit events carry its organization_id",
+    orgCAudit[0].n >= 1,
+    `found ${orgCAudit[0].n}`,
+  );
 
   await client.query('rollback');
 }

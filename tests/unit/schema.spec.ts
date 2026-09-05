@@ -147,6 +147,65 @@ describe('enum parity with src/lib/domain', () => {
 describe('tenant isolation is structural', () => {
   const sql = allMigrationSql();
 
+  /**
+   * The EFFECTIVE foreign-key constraints: the last definition of each
+   * constraint name, replayed across the migrations in filename order.
+   *
+   * Migrations are forward-only, so a superseded declaration stays in the file
+   * that wrote it — a plain grep over the concatenated SQL reports a defect
+   * that was fixed three migrations later. Replaying drops and re-adds is what
+   * makes this check mean what the database actually does.
+   */
+  function effectiveConstraints(): Array<{
+    name: string;
+    composite: boolean;
+    deleteAction: string | null;
+    setNullColumns: string | null;
+    referencesOrganizations: boolean;
+  }> {
+    // The trailing group captures the `on update … on delete …` clauses that
+    // belong to THIS constraint. It is anchored on `on update|on delete` so it
+    // stops at the next constraint rather than running into it.
+    const definition =
+      /constraint\s+([a-z_]+)\s+foreign\s+key\s*\(([^)]*)\)\s*references\s+(?:public\.)?([a-z_]+)\s*\(([^)]*)\)((?:[ \t]*(?:\r?\n)?\s*on\s+(?:update|delete)\s+(?:cascade|restrict|no\s+action|set\s+null|set\s+default)(?:\s*\([^)]*\))?)*)/gi;
+
+    const state = new Map<
+      string,
+      {
+        name: string;
+        composite: boolean;
+        deleteAction: string | null;
+        setNullColumns: string | null;
+        referencesOrganizations: boolean;
+      }
+    >();
+
+    for (const file of migrationFiles()) {
+      const text = readFileSync(join(MIGRATIONS_DIR, file), 'utf8').replace(/--[^\n]*/g, '');
+
+      for (const drop of text.matchAll(/drop\s+constraint\s+(?:if\s+exists\s+)?([a-z_]+)/gi)) {
+        state.delete(drop[1] as string);
+      }
+
+      for (const m of text.matchAll(definition)) {
+        const [, name, childCols, parent, , clauses] = m;
+        const action =
+          /\bon\s+delete\s+(cascade|restrict|no\s+action|set\s+null|set\s+default)(?:\s*\(([^)]*)\))?/i.exec(
+            clauses as string,
+          );
+        state.set(name as string, {
+          name: name as string,
+          composite: (childCols as string).includes(','),
+          deleteAction: action ? (action[1] as string).toLowerCase().replace(/\s+/g, ' ') : null,
+          setNullColumns: action?.[2] ? (action[2] as string).trim() : null,
+          referencesOrganizations: (parent as string).toLowerCase() === 'organizations',
+        });
+      }
+    }
+
+    return [...state.values()];
+  }
+
   // Tables that must carry organization_id and reach their parent through it.
   const TENANT_TABLES = [
     'engagements',
@@ -202,6 +261,43 @@ describe('tenant isolation is structural', () => {
         ),
       );
     }
+  });
+
+  it('leaves no composite foreign key with a bare SET NULL', () => {
+    // A composite FK is always (parent_id, organization_id). A bare
+    // `on delete set null` nulls BOTH columns, and organization_id is NOT NULL
+    // and frozen by growlith.freeze_organization_id() — so the referential
+    // action can never succeed and the parent cannot be deleted at all. Only
+    // the PostgreSQL 15+ column-list form (`set null (parent_id)`) is
+    // reachable.
+    //
+    // Migrations are forward-only, so a superseded declaration stays in the
+    // migration that wrote it. This resolves the EFFECTIVE state — last
+    // definition per constraint name, in filename order — which is what a
+    // naive grep over the concatenation would get wrong.
+    const violations = effectiveConstraints().filter(
+      (c) => c.composite && c.deleteAction === 'set null' && c.setNullColumns === null,
+    );
+    expect(
+      violations.map((c) => c.name),
+      'a bare SET NULL also nulls organization_id, which is NOT NULL and ' +
+        'immutable — name the column instead: `on delete set null (parent_id)`',
+    ).toEqual([]);
+  });
+
+  it('leaves no foreign key into organizations cascading', () => {
+    // The tenant root never cascades. One DELETE on organizations would
+    // otherwise physically remove a client's files, metrics, reports,
+    // membership history and invitations, bypassing the soft-delete retention
+    // policy the rest of the schema is built on. Deleting a tenant is the
+    // SUPER_ADMIN purge: ordered, explicit, and audited.
+    const violations = effectiveConstraints().filter(
+      (c) => c.referencesOrganizations && c.deleteAction === 'cascade',
+    );
+    expect(
+      violations.map((c) => c.name),
+      'use ON DELETE RESTRICT and let the purge delete children explicitly',
+    ).toEqual([]);
   });
 
   it('declares RLS on every table it creates', () => {
