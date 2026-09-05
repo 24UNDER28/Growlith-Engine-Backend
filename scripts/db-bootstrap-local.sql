@@ -54,3 +54,48 @@ $$;
 
 grant usage on schema public to anon, authenticated, service_role;
 grant usage on schema auth to anon, authenticated, service_role;
+
+-- Phase 4 addition: a storage-schema stub faithful enough for the migration
+-- set's storage guard (`to_regclass('storage.objects')`) to find its subject,
+-- so the SAME file creates the storage policies locally that Supabase gets,
+-- and the pgTAP suite exercises them for real. Column list mirrors
+-- Supabase's storage.objects where Phase 4's policies touch it
+-- (bucket_id, name, owner, path_tokens); it is a test fixture, not a
+-- re-implementation — no RLS bypass, no per-bucket machinery.
+create schema if not exists storage;
+
+create table if not exists storage.buckets (
+  id                 text primary key,
+  name               text not null,
+  public             boolean not null default false,
+  file_size_limit    bigint,
+  allowed_mime_types text[],
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz,
+  deleted_at         timestamptz
+);
+
+create table if not exists storage.objects (
+  id               uuid primary key default gen_random_uuid(),
+  bucket_id        text not null references storage.buckets (id) on delete cascade,
+  name             text not null,
+  owner            uuid,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  last_accessed_at timestamptz,
+  metadata         jsonb,
+  path_tokens      text[] generated always as (string_to_array(name, '/')) stored,
+
+  constraint objects_bucket_id_name_key unique (bucket_id, name)
+);
+
+-- Same posture as every application table: RLS on, FORCED on. A storage stack
+-- whose tables are bypassable by their owner is not a model of the real one.
+alter table storage.buckets enable row level security;
+alter table storage.buckets force row level security;
+alter table storage.objects enable row level security;
+alter table storage.objects force row level security;
+
+grant usage on schema storage to anon, authenticated, service_role;
+grant select on storage.buckets to anon, authenticated, service_role;
+grant select, insert, update, delete on storage.objects to anon, authenticated, service_role;

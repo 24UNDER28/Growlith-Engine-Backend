@@ -57,7 +57,10 @@ function enumValues(sql: string, typeName: string): string[] {
   // the Phase 3 auth migrations; the same rule applies to any future addition.
   const alterations = [
     ...sql.matchAll(
-      new RegExp(`alter\\s+type\\s+public\\.${typeName}\\s+add\\s+value\\s+'([^']+)'`, 'gi'),
+      new RegExp(
+        `alter\\s+type\\s+public\\.${typeName}\\s+add\\s+value\\s+(?:if\\s+not\\s+exists\\s+)?'([^']+)'`,
+        'gi',
+      ),
     ),
   ].map((m) => m[1] as string);
 
@@ -345,6 +348,9 @@ describe('tenant isolation is structural', () => {
       attachment: 'files',
       metric: 'metrics',
       notification: 'notifications',
+      // Phase 4: `report` joined the vocabulary for publication auditing and
+      // the projected activity feed; the table has existed since migration 17.
+      report: 'reports',
     };
 
     for (const entity of TENANT_SCOPED_ENTITIES) {

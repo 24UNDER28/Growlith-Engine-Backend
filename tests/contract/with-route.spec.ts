@@ -15,12 +15,15 @@ import { authContextFixture } from '../helpers/auth-fixtures';
  * the *guarantees* a consumer relies on — not the handler's own logic, which is
  * covered by service tests in later phases.
  *
- * Authentication and authorization: authorization (capabilities, Phase 4) is
- * not implemented yet and adding a passing test for a control that does not
- * exist would be worse than no test (Rule 14). AUTHENTICATION (Phase 3) is
- * wired through the required `auth` field and asserted below with the auth
- * authority mocked; the authority's own behaviour matrix (401/403/423/503 per
- * account status) lives in `tests/contract/auth-context.spec.ts`.
+ * Authentication and authorization: AUTHENTICATION (Phase 3) is wired through
+ * the required `auth` field; AUTHORIZATION (Phase 4) through the required
+ * `capability`. Both authorities are mocked here so the WRAPPER's wiring is
+ * what is under test — the guard's own decision table lives in
+ * `tests/unit/authorize.spec.ts`-level coverage and the authority's matrix in
+ * `tests/contract/auth-context.spec.ts`. What this file does assert about
+ * Phase 4, beyond wiring, is the TYPE-LEVEL contract: a protected route
+ * without a capability must not compile, and a public route must not be able
+ * to grow authorization machinery.
  */
 
 const VALID_UUID = '3f2b8c1a-9d4e-4a7b-8c2f-1e6d5b4a3920';
@@ -30,12 +33,20 @@ const VALID_UUID = '3f2b8c1a-9d4e-4a7b-8c2f-1e6d5b4a3920';
 // that the handler receives the resolved principal, and that the authority's
 // rejections surface as envelopes. The authority's own matrix is tested
 // against faked Supabase clients in auth-context.spec.ts.
-const { requireAuthContextMock } = vi.hoisted(() => ({
+const { requireAuthContextMock, authorizeMock } = vi.hoisted(() => ({
   requireAuthContextMock: vi.fn(),
+  authorizeMock: vi.fn(),
 }));
 
 vi.mock('@/server/auth/context', () => ({
   requireAuthContext: (...args: unknown[]) => requireAuthContextMock(...args),
+}));
+
+// The guard is mocked for the same reason the authority is: what is under
+// test is that withRoute consults it with the declared capability and the
+// resolved tenant/subject, and that its denial wins over the handler.
+vi.mock('@/server/auth/authorize', () => ({
+  authorize: (...args: unknown[]) => authorizeMock(...args),
 }));
 
 let originalLogLevel: string | undefined;
@@ -459,11 +470,13 @@ describe('authentication step (Phase 3)', () => {
   it('resolves the principal for required routes and hands it to the handler', async () => {
     const context = authContextFixture();
     requireAuthContextMock.mockResolvedValueOnce(context);
+    authorizeMock.mockResolvedValueOnce({ allowed: true, obligations: [] });
 
     let received: unknown = 'not called';
     const route = withRoute({
       method: 'GET',
       auth: 'required',
+      capability: 'user:update',
       summary: 'a protected read',
       handler: async (ctx) => {
         received = ctx.auth;
@@ -484,6 +497,7 @@ describe('authentication step (Phase 3)', () => {
     const route = withRoute({
       method: 'GET',
       auth: 'required',
+      capability: 'user:update',
       summary: 'a protected read',
       handler: async () => {
         handlerRan = true;
@@ -517,6 +531,7 @@ describe('authentication step (Phase 3)', () => {
     const route = withRoute({
       method: 'POST',
       auth: 'required',
+      capability: 'user:update',
       summary: 'a protected write',
       bodySchema: z.object({ name: z.string().min(1) }).strict(),
       handler: async () => ({ ok: true }),
@@ -528,5 +543,162 @@ describe('authentication step (Phase 3)', () => {
 
     expect(response.status).toBe(422);
     expect(requireAuthContextMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('authorization step (Phase 4)', () => {
+  const ORG_UUID = '7c9e0a3d-5b1f-4e8a-9d6c-2f4a7b1e8d90';
+
+  it('consults the guard with the declared capability, resolved tenant and subject, and forwards obligations', async () => {
+    requireAuthContextMock.mockResolvedValueOnce(authContextFixture());
+    authorizeMock.mockResolvedValueOnce({ allowed: true, obligations: ['OWN_ROW'] });
+
+    let obligations: readonly string[] | undefined;
+    const route = withRoute({
+      method: 'GET',
+      auth: 'required',
+      capability: 'user:update',
+      summary: 'a guarded read',
+      paramSchema: z.object({ userId: z.uuid() }).strict(),
+      tenant: ({ params }) => (params.userId === VALID_UUID ? ORG_UUID : null),
+      subjectUser: ({ params }) => params.userId,
+      denialSubject: { entityKind: 'profile', id: ({ params }) => params.userId },
+      handler: async (ctx) => {
+        obligations = ctx.obligations;
+        return { ok: true };
+      },
+    });
+
+    const response = await route(new Request(`http://localhost/api/v1/accounts/${VALID_UUID}`), {
+      params: Promise.resolve({ userId: VALID_UUID }),
+    });
+    expect(response.status).toBe(200);
+    const scope = authorizeMock.mock.lastCall?.[2] as Record<string, unknown>;
+    expect(scope).toMatchObject({ organizationId: ORG_UUID, subjectUserId: VALID_UUID });
+    expect(authorizeMock.mock.lastCall?.[1]).toBe('user:update');
+    expect(obligations).toEqual(['OWN_ROW']);
+  });
+
+  it('answers 404 (log-only, before the guard) when a row-based tenant resolver finds nothing', async () => {
+    requireAuthContextMock.mockResolvedValueOnce(authContextFixture());
+
+    let handlerRan = false;
+    const route = withRoute({
+      method: 'POST',
+      auth: 'required',
+      capability: 'invitation:update',
+      summary: 'guarded row mutation',
+      paramSchema: z.object({ id: z.uuid() }).strict(),
+      tenant: () => null,
+      handler: async () => {
+        handlerRan = true;
+      },
+    });
+
+    const response = await route(new Request('http://localhost/api/v1/invitations/x/revoke', { method: 'POST' }), {
+      params: Promise.resolve({ id: VALID_UUID }),
+    });
+    expect(response.status).toBe(404);
+    expect(handlerRan).toBe(false);
+    expect(authorizeMock).not.toHaveBeenCalled();
+  });
+
+  it('an `undefined` tenant (no tenant named) still consults the guard with organizationId null', async () => {
+    requireAuthContextMock.mockResolvedValueOnce(authContextFixture());
+    authorizeMock.mockResolvedValueOnce({ allowed: true, obligations: [] });
+
+    const route = withRoute({
+      method: 'POST',
+      auth: 'required',
+      capability: 'invitation:create',
+      summary: 'invite without naming a tenant',
+      bodySchema: z.object({ organizationId: z.uuid().optional() }).strict(),
+      tenant: ({ body }) => body.organizationId,
+      handler: async () => ({ ok: true }),
+    });
+
+    const response = await route(jsonRequest('POST', 'http://localhost/api/v1/invitations', {}));
+    expect(response.status).toBe(200);
+    expect(authorizeMock.mock.lastCall?.[2]).toMatchObject({ organizationId: null });
+  });
+
+  it('passes minAal through to both the authority and the guard', async () => {
+    requireAuthContextMock.mockResolvedValueOnce(authContextFixture());
+    authorizeMock.mockResolvedValueOnce({ allowed: true, obligations: [] });
+
+    const route = withRoute({
+      method: 'POST',
+      auth: 'required',
+      capability: 'user:update',
+      minAal: 2,
+      summary: 'a privileged write',
+      handler: async () => ({ ok: true }),
+    });
+
+    const response = await route(new Request('http://localhost/api/v1/thing', { method: 'POST' }));
+    expect(response.status).toBe(200);
+    expect(requireAuthContextMock).toHaveBeenCalledWith({ minAal: 2 });
+    expect(authorizeMock.mock.lastCall?.[2]).toMatchObject({ requiredAal: 2 });
+  });
+
+  it('surfaces a guard denial as its envelope without running the handler', async () => {
+    requireAuthContextMock.mockResolvedValueOnce(authContextFixture());
+    authorizeMock.mockRejectedValueOnce(ApiError.forbidden('not yours'));
+
+    let handlerRan = false;
+    const route = withRoute({
+      method: 'GET',
+      auth: 'required',
+      capability: 'user:update',
+      summary: 'guarded read',
+      handler: async () => {
+        handlerRan = true;
+      },
+    });
+
+    const response = await route(new Request('http://localhost/api/v1/thing'));
+    const body = await readJson(response);
+    expect(response.status).toBe(403);
+    expect((body.error as { code: string }).code).toBe(ErrorCode.Forbidden);
+    expect(handlerRan).toBe(false);
+  });
+
+  it('refuses to serve (500) a protected route whose capability was removed by a cast', async () => {
+    requireAuthContextMock.mockResolvedValueOnce(authContextFixture());
+    // The one thing the type system forbids, asserted through the runtime
+    // backstop: a definition smuggled in with a cast must fail CLOSED.
+    const smuggled = {
+      method: 'GET',
+      auth: 'required',
+      summary: 'capability-less',
+      handler: async () => ({ ok: true }),
+    } as never;
+    const route = withRoute(smuggled);
+    const response = await route(new Request('http://localhost/api/v1/thing'));
+    expect(response.status).toBe(500);
+    expect(authorizeMock).not.toHaveBeenCalled();
+  });
+
+  it('is skipped entirely for public routes', async () => {
+    const route = withRoute({
+      method: 'GET',
+      auth: 'public',
+      summary: 'an open read',
+      handler: async () => ({ ok: true }),
+    });
+    await route(new Request('http://localhost/api/v1/thing'));
+    expect(authorizeMock).not.toHaveBeenCalled();
+  });
+
+  it('enforces the capability contract at compile time', () => {
+    // @ts-expect-error — Phase 4 contract: 'required' without a capability does not compile.
+    withRoute({ method: 'GET', auth: 'required', summary: 'unguarded', handler: async () => undefined });
+    // @ts-expect-error — a public route cannot carry a capability…
+    withRoute({ method: 'GET', auth: 'public', summary: 'open', capability: 'user:update', handler: async () => undefined });
+    // @ts-expect-error — …nor any authorization machinery at all.
+    withRoute({ method: 'GET', auth: 'public', summary: 'open', tenant: () => null, handler: async () => undefined });
+    // @ts-expect-error — a public route cannot demand an assurance floor it never reads.
+    withRoute({ method: 'GET', auth: 'public', summary: 'open', minAal: 2, handler: async () => undefined });
+    expect(true).toBe(true);
   });
 });

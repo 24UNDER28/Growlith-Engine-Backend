@@ -230,6 +230,10 @@ async function verifyStructure(client) {
     'attachment',
     'metric',
     'notification',
+    // Phase 3 added identity-surface auditing (account status, MFA, sessions).
+    'profile',
+    // Phase 4 added report publication auditing and the projected feed.
+    'report',
   ];
   check(
     'entity_kind matches src/lib/domain/entities.ts',
@@ -929,7 +933,10 @@ async function verifyBehaviour(client) {
     'an organization with dependent evidence cannot be hard-deleted',
     `delete from public.organizations where id = $1`,
     [orgC[0].id],
-    'violates foreign key constraint',
+    // PostgreSQL 18 words RESTRICT violations as
+    // `violates RESTRICT setting of foreign key constraint`; earlier majors said
+    // `violates foreign key constraint ...`. Match the stable middle.
+    'foreign key constraint',
   );
   const { rows: orgCFile } = await client.query(
     `select count(*)::int as n from public.files where organization_id = $1`,

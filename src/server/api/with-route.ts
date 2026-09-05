@@ -3,6 +3,9 @@ import 'server-only';
 import { z } from 'zod';
 
 import type { AuthContext } from '@/lib/auth/context';
+import type { Capability, PermissionQualifier } from '@/lib/domain/permissions';
+import type { EntityKind } from '@/lib/domain/entities';
+import { authorize } from '@/server/auth/authorize';
 import type { HttpMethod } from '@/lib/types/http';
 import type { SuccessStatusCode } from '@/lib/types/api-envelope';
 import { toValidationIssues } from '@/lib/validation/format';
@@ -36,10 +39,23 @@ import { createLogger, type Logger } from '@/server/logging/logger';
  * (login/logout/session/password-recovery); everything under `/api/v1/**` else
  * is denied by construction.
  *
- * WHAT IS DELIBERATELY ABSENT (Phase 4)
- * No capability check yet — fine-grained authorization is Phase 4 by
- * instruction, and the `capability` field will slot in beside `auth` with the
- * same required-field enforcement.
+ * AUTHORIZATION (Phase 4)
+ * Beside `auth`, every protected route now also declares `capability` — a
+ * `{resource}:{action}` string from the single source-of-truth matrix
+ * (`src/lib/domain/permissions.ts`). The declared type makes it a COMPILE
+ * ERROR for a protected route to omit one, the mirror of the `auth` posture
+ * rule. Order inside the wrapper, after authentication:
+ *
+ *   tenant resolution → capability check → obligations → handler.
+ *
+ * `tenant` maps a request to the organization it targets; an actor who cannot
+ * reach that tenant gets a 404 (the 404-before-403 rule, ADR-0019) — a route
+ * never learns "does this belong to someone else?". Capability denials answer
+ * 403 and write the PERMISSION_DENIED audit row before the response goes out
+ * (§11). What the guard cannot see without loading the row — CLIENT_VISIBLE,
+ * object-side PROJECT_MEMBER, STATE_MACHINE, RPC_ONLY, COLUMN_RESTRICTED —
+ * arrives in the handler context as OBLIGATIONS the service layer must honour
+ * (§I.2); RLS enforces the rows regardless of whether anyone forgot.
  */
 
 /**
@@ -53,6 +69,50 @@ export const MAX_JSON_BODY_BYTES = 1_048_576; // 1 MiB
 
 /** The authentication posture every route must declare. */
 export type RouteAuth = 'public' | 'required';
+
+/** Everything a capability/tenant resolver may consult at guard time. */
+export interface RouteAuthorizationContext<TParams, TQuery, TBody> {
+  readonly params: TParams;
+  readonly query: TQuery;
+  readonly body: TBody;
+  readonly auth: AuthContext;
+}
+
+export type RouteTenantResolver<TParams, TQuery, TBody> = (
+  context: RouteAuthorizationContext<TParams, TQuery, TBody>,
+) => string | null | undefined | Promise<string | null | undefined>;
+
+/** Fields that qualify HOW the capability is checked. Legitimate on protected
+ * routes only; the public branch of the definition type pins each to
+ * `undefined` so a public route cannot grow authorization machinery. */
+export interface RouteAuthorizationFields<TParams, TQuery, TBody> {
+  /** Resolve the tenant the operation targets — from a request field when
+   * the request names it, from the ROW (via the caller's own RLS) when only
+   * the row knows (§I.3 step 4: "Routes that address a row by id receive the
+   * tenant from the row, not from the caller"). A null result is a 404: an
+   * invisible row and a missing row are one answer; returning `undefined`
+   * instead asserts "the request names no tenant" and lets the matrix cell
+   * answer — a TENANT-scoped cell denies, a GLOBAL/SELF cell proceeds (the
+   * platform branch of invitation creation is the shape this exists for).
+   * Required whenever the
+   * capability is TENANT-scoped (enforced by the contract suite against the
+   * matrix; enforced at runtime by the guard refusing to guess). */
+  readonly tenant?: RouteTenantResolver<TParams, TQuery, TBody>;
+  /** The project a `[P]`-qualified capability consults for the one
+   * actor-side rule the matrix can evaluate (§5 rule 3). */
+  readonly project?: RouteTenantResolver<TParams, TQuery, TBody>;
+  /** For SELF-scoped capabilities whose subject is a path-named person. */
+  readonly subjectUser?: RouteTenantResolver<TParams, TQuery, TBody>;
+  /** Authenticator assurance floor (§6c: /admin surfaces require aal2). */
+  readonly minAal?: 1 | 2;
+  /** The audit subject for a capability denial, when the route can name
+   * it without loading the row. Omitting it degrades the audit to
+   * "actor was denied", never to a fabricated row reference. */
+  readonly denialSubject?: {
+    readonly entityKind?: EntityKind;
+    readonly id?: (context: RouteAuthorizationContext<TParams, TQuery, TBody>) => string | null;
+  };
+}
 
 export interface RouteHandlerContext<TParams, TQuery, TBody, TAuth extends RouteAuth = RouteAuth> {
   readonly request: Request;
@@ -68,9 +128,18 @@ export interface RouteHandlerContext<TParams, TQuery, TBody, TAuth extends Route
    * handler simply reads `context.auth.userId` — no guard, no cast.
    */
   readonly auth: TAuth extends 'required' ? AuthContext : undefined;
+  /**
+   * The obligations the guard recorded but could not itself evaluate
+   * (§I.2): CLIENT_VISIBLE means "scope this read with the client gate",
+   * PROJECT_MEMBER means "the object rule belongs to you/the trigger",
+   * STATE_MACHINE means "run the transition past the catalogue", RPC_ONLY
+   * means "the sanctioned write path is the definer RPC". An empty array
+   * means the guard decided everything it could.
+   */
+  readonly obligations: readonly PermissionQualifier[];
 }
 
-export interface RouteDefinition<
+export interface RouteDefinitionCore<
   TParams,
   TQuery,
   TBody,
@@ -102,11 +171,6 @@ export interface RouteDefinition<
    * without cross-referencing source.
    */
   readonly summary: string;
-  /**
-   * Authentication posture — required, so the default for a new route is a
-   * COMPILE ERROR, not silent public access (design §5, §15).
-   */
-  readonly auth: TAuth;
   readonly paramSchema?: z.ZodType<TParams>;
   readonly querySchema?: z.ZodType<TQuery>;
   readonly bodySchema?: z.ZodType<TBody>;
@@ -121,8 +185,62 @@ export interface NextRouteContext {
   readonly params: Promise<Record<string, string>>;
 }
 
+/**
+ * A route's definition is its core shape INTERSECTED with the authorization
+ * declaration for its posture. The conditional type is the enforcement:
+ * `auth: 'required'` without `capability` does not type-check, and
+ * `auth: 'public'` with one does not either.
+ */
+export type RouteDefinition<
+  TParams = undefined,
+  TQuery = undefined,
+  TBody = undefined,
+  TData = void,
+  TAuth extends RouteAuth = RouteAuth,
+> = RouteDefinitionCore<TParams, TQuery, TBody, TData, TAuth> & { readonly auth: TAuth } & (TAuth extends
+  'required'
+  ? RouteAuthorizationFields<TParams, TQuery, TBody> & { readonly capability: Capability }
+  : { readonly capability?: undefined } & Partial<
+      Record<'tenant' | 'project' | 'subjectUser' | 'minAal' | 'denialSubject', undefined>
+    >);
+
+/** The implementation-facing shape: every branch, all optional, one type. */
+type AnyRouteDefinition = RouteDefinitionCore<
+  Record<string, unknown> | undefined,
+  Record<string, unknown> | undefined,
+  unknown,
+  unknown
+> & {
+  readonly auth: RouteAuth;
+  readonly capability?: Capability;
+} & RouteAuthorizationFields<unknown, unknown, unknown>;
+
+/** Convenience resolvers: the two shapes nearly every route uses. */
+export function tenantFromField(
+  source: 'params' | 'query',
+  key: string,
+): <TParams, TQuery, TBody>(context: RouteAuthorizationContext<TParams, TQuery, TBody>) => string | null {
+  return (context) => {
+    const container = (source === 'params' ? context.params : context.query) as
+      | Record<string, unknown>
+      | undefined;
+    const value = container?.[key];
+    return typeof value === 'string' && value.length > 0 ? value : null;
+  };
+}
+
 export type RouteHandler = (request: Request, context?: NextRouteContext) => Promise<Response>;
 
+/**
+ * One generic signature; the CONDITIONAL in `RouteDefinition` does the
+ * enforcement — `TAuth` is inferred from the literal `auth` field, so a
+ * route declaring `'required'` gets `capability: Capability` REQUIRED at the
+ * type level and a route declaring `'public'` cannot supply one at all.
+ * Inside, the authorization fields are read through a widened view of the
+ * definition (`authz`): TypeScript cannot resolve a conditional on a generic
+ * at the declaration site, and the cast is sound because the only shapes the
+ * overloads' conditional admits are the ones the view contains.
+ */
 export function withRoute<
   TParams = undefined,
   TQuery = undefined,
@@ -131,6 +249,7 @@ export function withRoute<
   TAuth extends RouteAuth = RouteAuth,
 >(definition: RouteDefinition<TParams, TQuery, TBody, TData, TAuth>): RouteHandler {
   return async (request, context) => {
+    const authz = definition as unknown as AnyRouteDefinition;
     const requestId = resolveRequestId(request.headers);
     const pathname = safePathname(request.url);
     const log = createLogger({ requestId, route: `${definition.method} ${pathname}` });
@@ -160,8 +279,62 @@ export function withRoute<
       // the presence touch; its rejections surface as normal `ApiError`
       // envelopes through the shared catch below.
       const auth = (
-        definition.auth === 'required' ? await requireAuthContext() : undefined
+        definition.auth === 'required'
+          ? await requireAuthContext(authz.minAal === 2 ? { minAal: 2 } : {})
+          : undefined
       ) as TAuth extends 'required' ? AuthContext : undefined;
+
+      // ── The authorization steps (Phase 4) ──────────────────────────────
+      let obligations: readonly PermissionQualifier[] = [];
+      if (definition.auth === 'required') {
+        if (authz.capability === undefined) {
+          // Type-level impossibility with a runtime backstop: a route built
+          // through `as` casts must not ship open. 500 names it as the
+          // deployment bug it is, rather than answering the caller at all.
+          throw ApiError.internal(
+            new Error(`protected route ${definition.method} ${pathname} declares no capability`),
+          );
+        }
+        const guardContext = { params, query, body, auth: auth as AuthContext };
+        let organizationId: string | null = null;
+        if (authz.tenant !== undefined) {
+          const resolvedTenant = await authz.tenant(guardContext);
+          if (resolvedTenant === null) {
+            // The resolver LOOKED (at a row, through the caller's RLS) and
+            // found nothing — "not visible to you", and the 404-before-403
+            // rule allows no sharper answer (ADR-0019). Log-only: a probe
+            // must not mint audit rows about other people's data.
+            log.info('tenant unresolvable — answered 404', {
+              capability: authz.capability,
+            });
+            throw ApiError.notFound();
+          }
+          organizationId = resolvedTenant ?? null;
+        }
+        const projectId = authz.project ? await authz.project(guardContext) : null;
+        const subjectUserId = authz.subjectUser ? await authz.subjectUser(guardContext) : null;
+        const denialEntityId = authz.denialSubject?.id
+          ? await authz.denialSubject.id(guardContext)
+          : null;
+
+        const guard = await authorize(
+          auth as AuthContext,
+          authz.capability,
+          { organizationId, projectId, subjectUserId, ...(authz.minAal === undefined ? {} : { requiredAal: authz.minAal }) },
+          log,
+          requestId,
+          request,
+          authz.denialSubject === undefined
+            ? undefined
+            : {
+                ...(authz.denialSubject.entityKind === undefined
+                  ? {}
+                  : { entityKind: authz.denialSubject.entityKind }),
+                entityId: denialEntityId,
+              },
+        );
+        obligations = guard.obligations;
+      }
 
       const data = await definition.handler({
         request,
@@ -171,6 +344,7 @@ export function withRoute<
         requestId,
         log,
         auth,
+        obligations,
       });
 
       const status = definition.successStatus ?? 200;

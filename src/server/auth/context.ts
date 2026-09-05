@@ -11,6 +11,10 @@ import {
 
 import { z } from 'zod';
 import type { AuthContext } from '@/lib/auth/context';
+import { INTERNAL_TEAMS } from '@/lib/domain/teams';
+import { PROJECT_MEMBER_ROLES } from '@/lib/domain/roles';
+import type { ProjectMemberRole } from '@/lib/domain/roles';
+import type { InternalTeam } from '@/lib/domain/teams';
 import { ErrorCode } from '@/lib/types/error-codes';
 import { ApiError } from '@/server/api/errors';
 import { createLogger, type Logger } from '@/server/logging/logger';
@@ -90,7 +94,27 @@ const authContextSchema = z.object({
       }),
     )
     .max(50),
+  // Phase 4 additions, delivered on the SAME round trip (§2). Unknown team
+  // codes fail parsing rather than passing through: the array feeds UI chips
+  // and the audit trail, and an unpinned string is how vocabularies rot.
+  teams: z.array(z.enum(INTERNAL_TEAMS as unknown as [string, ...string[]]))
+    .transform((teams) => teams as InternalTeam[])
+    .default([]),
+  projectRoles: z
+    .array(
+      z.object({
+        projectId: z.string().min(1),
+        role: z.enum(PROJECT_MEMBER_ROLES as unknown as [string, ...string[]]),
+      }),
+    )
+    .max(500)
+    .default([]),
+  projectRolesOverflow: z.boolean().default(false),
 });
+
+// A local alias keeps the transform's element type honest without exporting
+// internals of the schema object.
+type ParsedProjectRole = { projectId: string; role: ProjectMemberRole };
 
 /** The throttled presence window; mirrors `touch_last_seen()`'s SQL. */
 const PRESENCE_THRESHOLD_MS = 5 * 60 * 1000;
@@ -204,6 +228,14 @@ async function resolveDatabaseContext(
     aal,
     mfaEnrolled: user.factors?.some((factor) => factor.status === 'verified') ?? false,
     lastSeenAt: parsed.data.lastSeenAt,
+    teams: parsed.data.teams,
+    projectRoles: Object.fromEntries(
+      (parsed.data.projectRoles as readonly ParsedProjectRole[]).map((entry) => [
+        entry.projectId,
+        entry.role,
+      ]),
+    ),
+    projectRolesOverflow: parsed.data.projectRolesOverflow,
   };
 }
 
