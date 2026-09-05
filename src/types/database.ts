@@ -1365,6 +1365,14 @@ export interface Database {
         Args: Record<string, unknown>;
         Returns: unknown;
       };
+      add_organization_member: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      approve_deliverable: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
       auth_context: {
         Args: Record<string, unknown>;
         Returns: unknown;
@@ -1377,11 +1385,35 @@ export interface Database {
         Args: Record<string, unknown>;
         Returns: unknown;
       };
+      can_read_storage_object: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      client_activity_feed: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
       current_org_ids: {
         Args: Record<string, unknown>;
         Returns: unknown;
       };
+      current_project_ids: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
       current_team_codes: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      deliverable_is_client_visible: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      erase_user: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      grant_platform_role: {
         Args: Record<string, unknown>;
         Returns: unknown;
       };
@@ -1405,6 +1437,10 @@ export interface Database {
         Args: Record<string, unknown>;
         Returns: unknown;
       };
+      is_project_member: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
       is_super_admin: {
         Args: Record<string, unknown>;
         Returns: unknown;
@@ -1413,11 +1449,55 @@ export interface Database {
         Args: Record<string, unknown>;
         Returns: unknown;
       };
+      project_is_client_visible: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      project_role_in: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      publish_report: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      purge_organization: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      record_authorization_denial: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      remove_organization_member: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      report_is_client_visible: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      revoke_platform_role: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      shares_org_with: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
       storage_path_org_id: {
         Args: Record<string, unknown>;
         Returns: unknown;
       };
+      submit_deliverable_review: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
       touch_last_seen: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      update_organization_member: {
         Args: Record<string, unknown>;
         Returns: unknown;
       };
@@ -1481,7 +1561,8 @@ export interface Database {
         | 'attachment'
         | 'metric'
         | 'notification'
-        | 'profile';
+        | 'profile'
+        | 'report';
       fee_model: 'RETAINER' | 'FIXED' | 'HOURLY' | 'PERFORMANCE';
       file_kind:
         | 'ATTACHMENT'

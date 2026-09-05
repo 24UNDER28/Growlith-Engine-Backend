@@ -47,10 +47,23 @@ export const IDENTITY_ENTITIES = ['profile'] as const;
 
 export type IdentityEntity = (typeof IDENTITY_ENTITIES)[number];
 
+/**
+ * Reporting entity. `report` arrives in Phase 4: publication freezes figures
+ * for the client, and both the audit event (§B.4 `report:publish`) and the
+ * projected activity feed (§F.4's allow-list) need an answer to "which thing
+ * happened to". Like `profile` before it, it is APPENDED to the enum rather
+ * than interleaved — PostgreSQL enum labels are positional, and reordering
+ * one in place requires a type rewrite of every stored value.
+ */
+export const REPORTING_ENTITIES = ['report'] as const;
+
+export type ReportingEntity = (typeof REPORTING_ENTITIES)[number];
+
 export const ENTITY_KINDS = [
   ...HIERARCHY_ENTITIES,
   ...SUPPORTING_ENTITIES,
   ...IDENTITY_ENTITIES,
+  ...REPORTING_ENTITIES,
 ] as const;
 export type EntityKind = (typeof ENTITY_KINDS)[number];
 
@@ -100,6 +113,9 @@ export const TENANT_SCOPED_ENTITIES = [
   'attachment',
   'metric',
   'notification',
+  // Phase 4: a report is the tenant's reporting artifact — frozen figures
+  // about this organization, published to it.
+  'report',
 ] as const satisfies readonly EntityKind[];
 
 export type TenantScopedEntity = (typeof TENANT_SCOPED_ENTITIES)[number];
