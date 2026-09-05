@@ -117,9 +117,7 @@ async function transition(
   // from the database, never from the request, so a compromised ADMIN cannot
   // suspend or offboard the very accounts that supervise it.
   if (input.actor.platformRole === 'ADMIN' && target.holdsSuperAdmin) {
-    throw ApiError.forbidden(
-      'Only SUPER_ADMIN may change the status of a SUPER_ADMIN account.',
-    );
+    throw ApiError.forbidden('Only SUPER_ADMIN may change the status of a SUPER_ADMIN account.');
   }
 
   // 1. The status write itself. Row is re-fetched under `single()` and the
@@ -253,7 +251,12 @@ async function loadProfile(
     return row.role === 'SUPER_ADMIN' && live;
   });
 
-  return { id: data.id, account_status: data.account_status, deleted_at: data.deleted_at, holdsSuperAdmin };
+  return {
+    id: data.id,
+    account_status: data.account_status,
+    deleted_at: data.deleted_at,
+    holdsSuperAdmin,
+  };
 }
 
 async function deactivateMemberships(

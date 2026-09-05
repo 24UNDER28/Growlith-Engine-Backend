@@ -272,183 +272,471 @@ async function main() {
   const globex = ORGS.globex;
 
   /* ── 1. Cross-tenant reads (access another organization / another client's project) ── */
-  await attack(db, 'read another organization row', dana,
-    `select 1 from public.organizations where id = '${globex}'`);
-  await attack(db, 'read another tenant\'s engagement', dana,
-    `select 1 from public.engagements where organization_id = '${globex}'`);
-  await attack(db, 'read another tenant\'s service', dana,
-    `select 1 from public.services where organization_id = '${globex}'`);
-  await attack(db, 'read another client\'s project', dana,
-    `select 1 from public.projects where id = '${IDS.globexProject}'`);
-  await attack(db, 'read another tenant\'s deliverables', dana,
-    `select 1 from public.deliverables where organization_id = '${globex}'`);
-  await attack(db, 'read another tenant\'s deliverable versions', dana,
-    `select 1 from public.deliverable_versions where organization_id = '${globex}'`);
-  await attack(db, 'read another tenant\'s comments', dana,
-    `select 1 from public.comments where organization_id = '${globex}'`);
-  await attack(db, 'read another tenant\'s reports', dana,
-    `select 1 from public.reports where organization_id = '${globex}'`);
-  await attack(db, 'read another tenant\'s report metrics', dana,
-    `select 1 from public.report_metrics where organization_id = '${globex}'`);
-  await attack(db, 'read another tenant\'s raw metrics', dana,
-    `select 1 from public.metrics where organization_id = '${globex}'`);
-  await attack(db, 'read another tenant\'s files (metadata)', dana,
-    `select 1 from public.files where organization_id = '${globex}'`);
-  await attack(db, 'read another tenant\'s organization settings', dana,
-    `select 1 from public.organization_settings where organization_id = '${globex}'`);
-  await attack(db, 'read another tenant\'s membership roster', dana,
-    `select 1 from public.organization_memberships where organization_id = '${globex}'`);
-  await attack(db, 'read another tenant\'s invitations', dana,
-    `select 1 from public.invitations where organization_id = '${globex}'`);
+  await attack(
+    db,
+    'read another organization row',
+    dana,
+    `select 1 from public.organizations where id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "read another tenant's engagement",
+    dana,
+    `select 1 from public.engagements where organization_id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "read another tenant's service",
+    dana,
+    `select 1 from public.services where organization_id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "read another client's project",
+    dana,
+    `select 1 from public.projects where id = '${IDS.globexProject}'`,
+  );
+  await attack(
+    db,
+    "read another tenant's deliverables",
+    dana,
+    `select 1 from public.deliverables where organization_id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "read another tenant's deliverable versions",
+    dana,
+    `select 1 from public.deliverable_versions where organization_id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "read another tenant's comments",
+    dana,
+    `select 1 from public.comments where organization_id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "read another tenant's reports",
+    dana,
+    `select 1 from public.reports where organization_id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "read another tenant's report metrics",
+    dana,
+    `select 1 from public.report_metrics where organization_id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "read another tenant's raw metrics",
+    dana,
+    `select 1 from public.metrics where organization_id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "read another tenant's files (metadata)",
+    dana,
+    `select 1 from public.files where organization_id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "read another tenant's organization settings",
+    dana,
+    `select 1 from public.organization_settings where organization_id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "read another tenant's membership roster",
+    dana,
+    `select 1 from public.organization_memberships where organization_id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "read another tenant's invitations",
+    dana,
+    `select 1 from public.invitations where organization_id = '${globex}'`,
+  );
 
   /* ── 2. Cross-tenant writes (modify another client's project) ── */
-  await attack(db, 'modify another client\'s project', dana,
-    `update public.projects set name = 'pwned' where id = '${IDS.globexProject}'`);
-  await attack(db, 'modify another tenant\'s deliverable', dana,
-    `update public.deliverables set title = 'pwned' where organization_id = '${globex}'`);
-  await attack(db, 'modify another tenant\'s engagement', dana,
-    `update public.engagements set name = 'pwned' where organization_id = '${globex}'`);
-  await attack(db, 'modify another tenant\'s organization', dana,
-    `update public.organizations set legal_name = 'pwned' where id = '${globex}'`);
-  await attack(db, 'modify another tenant\'s organization settings', dana,
-    `update public.organization_settings set timezone = 'Mars/Olympus' where organization_id = '${globex}'`);
-  await attack(db, 'soft-delete another tenant\'s file', dana,
-    `update public.files set deleted_at = now() where organization_id = '${globex}'`);
-  await attack(db, 'soft-delete another tenant\'s comment', dana,
-    `update public.comments set deleted_at = now() where organization_id = '${globex}'`);
-  await attackError(db, 'insert a project into another tenant', dana,
+  await attack(
+    db,
+    "modify another client's project",
+    dana,
+    `update public.projects set name = 'pwned' where id = '${IDS.globexProject}'`,
+  );
+  await attack(
+    db,
+    "modify another tenant's deliverable",
+    dana,
+    `update public.deliverables set title = 'pwned' where organization_id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "modify another tenant's engagement",
+    dana,
+    `update public.engagements set name = 'pwned' where organization_id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "modify another tenant's organization",
+    dana,
+    `update public.organizations set legal_name = 'pwned' where id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "modify another tenant's organization settings",
+    dana,
+    `update public.organization_settings set timezone = 'Mars/Olympus' where organization_id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "soft-delete another tenant's file",
+    dana,
+    `update public.files set deleted_at = now() where organization_id = '${globex}'`,
+  );
+  await attack(
+    db,
+    "soft-delete another tenant's comment",
+    dana,
+    `update public.comments set deleted_at = now() where organization_id = '${globex}'`,
+  );
+  await attackError(
+    db,
+    'insert a project into another tenant',
+    dana,
     `insert into public.projects (organization_id, service_id, code, name, owning_team)
-     values ('${globex}', 'b2000000-0000-4000-8000-000000000001', 'GLX-HAX', 'pwned', 'WEB_DEVELOPMENT')`);
-  await attackError(db, 'insert a file into another tenant', dana,
+     values ('${globex}', 'b2000000-0000-4000-8000-000000000001', 'GLX-HAX', 'pwned', 'WEB_DEVELOPMENT')`,
+  );
+  await attackError(
+    db,
+    'insert a file into another tenant',
+    dana,
     `insert into public.files (organization_id, storage_path, file_name, mime_type, size_bytes, uploaded_by)
-     values ('${globex}', '${globex}/pwn.txt', 'pwn.txt', 'text/plain', 1, '${dana}')`);
-  await attackError(db, 'insert a comment into another tenant', dana,
+     values ('${globex}', '${globex}/pwn.txt', 'pwn.txt', 'text/plain', 1, '${dana}')`,
+  );
+  await attackError(
+    db,
+    'insert a comment into another tenant',
+    dana,
     `insert into public.comments (organization_id, deliverable_id, author_user_id, body, is_internal)
-     values ('${globex}', '${IDS.globexDeliverable}', '${dana}', 'pwned', false)`);
-  await attackError(db, 'insert organization membership into another tenant (direct write)', dana,
+     values ('${globex}', '${IDS.globexDeliverable}', '${dana}', 'pwned', false)`,
+  );
+  await attackError(
+    db,
+    'insert organization membership into another tenant (direct write)',
+    dana,
     `insert into public.organization_memberships (organization_id, user_id, role, status)
-     values ('${globex}', '${dana}', 'CLIENT_ADMIN', 'ACTIVE')`);
+     values ('${globex}', '${dana}', 'CLIENT_ADMIN', 'ACTIVE')`,
+  );
 
   /* ── 3. Internal-only data ── */
-  await attack(db, 'read tasks (internal-only, even own tenant)', dana,
-    `select 1 from public.tasks where organization_id = '${acme}'`);
-  await attack(db, 'read staff team memberships', dana,
-    `select 1 from public.staff_team_memberships`);
-  await attack(db, 'read audit events', dana,
-    `select 1 from public.audit_events where organization_id = '${acme}'`);
-  await attack(db, 'read the platform role roster', dana,
-    `select 1 from public.platform_role_grants`);
-  await attack(db, 'read internal (staff) comments on own tenant', dana,
-    `select 1 from public.comments where organization_id = '${acme}' and is_internal`);
-  await attack(db, 'read an unpublished (DRAFT) report', dana,
-    `select 1 from public.reports where organization_id = '${acme}' and status = 'DRAFT'`);
-  await attack(db, 'read a non-client-visible deliverable', dana,
-    `select 1 from public.deliverables where id = '${IDS.acmeDeliverableInternal}'`);
-  await attackError(db, 'read engagement contract_value (internal column)', dana,
-    `select contract_value from public.engagements where id = '${IDS.acmeEngagement}'`);
-  await attackError(db, 'read engagement monthly_retainer (internal column)', dana,
-    `select monthly_retainer from public.engagements where id = '${IDS.acmeEngagement}'`);
-  await attackError(db, 'read engagement notes_internal (internal column)', dana,
-    `select notes_internal from public.engagements where id = '${IDS.acmeEngagement}'`);
-  await attackError(db, 'read service fee (internal column)', dana,
-    `select fee from public.services where id = '${IDS.acmeService}'`);
-  await attackError(db, 'read service fee_model (internal column)', dana,
-    `select fee_model from public.services where id = '${IDS.acmeService}'`);
+  await attack(
+    db,
+    'read tasks (internal-only, even own tenant)',
+    dana,
+    `select 1 from public.tasks where organization_id = '${acme}'`,
+  );
+  await attack(
+    db,
+    'read staff team memberships',
+    dana,
+    `select 1 from public.staff_team_memberships`,
+  );
+  await attack(
+    db,
+    'read audit events',
+    dana,
+    `select 1 from public.audit_events where organization_id = '${acme}'`,
+  );
+  await attack(
+    db,
+    'read the platform role roster',
+    dana,
+    `select 1 from public.platform_role_grants`,
+  );
+  await attack(
+    db,
+    'read internal (staff) comments on own tenant',
+    dana,
+    `select 1 from public.comments where organization_id = '${acme}' and is_internal`,
+  );
+  await attack(
+    db,
+    'read an unpublished (DRAFT) report',
+    dana,
+    `select 1 from public.reports where organization_id = '${acme}' and status = 'DRAFT'`,
+  );
+  await attack(
+    db,
+    'read a non-client-visible deliverable',
+    dana,
+    `select 1 from public.deliverables where id = '${IDS.acmeDeliverableInternal}'`,
+  );
+  await attackError(
+    db,
+    'read engagement contract_value (internal column)',
+    dana,
+    `select contract_value from public.engagements where id = '${IDS.acmeEngagement}'`,
+  );
+  await attackError(
+    db,
+    'read engagement monthly_retainer (internal column)',
+    dana,
+    `select monthly_retainer from public.engagements where id = '${IDS.acmeEngagement}'`,
+  );
+  await attackError(
+    db,
+    'read engagement notes_internal (internal column)',
+    dana,
+    `select notes_internal from public.engagements where id = '${IDS.acmeEngagement}'`,
+  );
+  await attackError(
+    db,
+    'read service fee (internal column)',
+    dana,
+    `select fee from public.services where id = '${IDS.acmeService}'`,
+  );
+  await attackError(
+    db,
+    'read service fee_model (internal column)',
+    dana,
+    `select fee_model from public.services where id = '${IDS.acmeService}'`,
+  );
 
   /* ── 4. Unauthorized task updates ── */
-  await attack(db, 'update a task (no client task policy)', dana,
-    `update public.tasks set title = 'pwned' where organization_id = '${acme}'`);
-  await attackError(db, 'insert a task (no client task policy)', dana,
+  await attack(
+    db,
+    'update a task (no client task policy)',
+    dana,
+    `update public.tasks set title = 'pwned' where organization_id = '${acme}'`,
+  );
+  await attackError(
+    db,
+    'insert a task (no client task policy)',
+    dana,
     `insert into public.tasks (organization_id, project_id, title)
-     values ('${acme}', '${IDS.acmeProject}', 'pwned')`);
-  await attackError(db, 'delete a task (delete never granted)', dana,
-    `delete from public.tasks where organization_id = '${acme}'`);
+     values ('${acme}', '${IDS.acmeProject}', 'pwned')`,
+  );
+  await attackError(
+    db,
+    'delete a task (delete never granted)',
+    dana,
+    `delete from public.tasks where organization_id = '${acme}'`,
+  );
 
   /* ── 5. Unauthorized deliverable approvals ── */
-  await attackError(db, 'CLIENT_MEMBER approves a deliverable', eli,
-    `select public.approve_deliverable('${IDS.acmeDeliverableReview}', 'APPROVED', null)`);
-  await attackError(db, 'approve ANOTHER tenant\'s deliverable', dana,
-    `select public.approve_deliverable('${IDS.globexDeliverable}', 'APPROVED', null)`);
-  await attackError(db, 'approve a deliverable not in CLIENT_REVIEW', dana,
-    `select public.approve_deliverable('${IDS.acmeDeliverableInternal}', 'APPROVED', null)`);
-  await attackError(db, 'client REJECTED outcome is refused', dana,
-    `select public.approve_deliverable('${IDS.acmeDeliverableReview}', 'REJECTED', 'no')`);
-  await attackError(db, 'client approval with forged approved_by', dana,
-    `update public.deliverables set approved_by = '${ben}', status = 'APPROVED' where id = '${IDS.acmeDeliverableReview}'`);
-  await attackError(db, 'client flips deliverable visibility flag', dana,
-    `update public.deliverables set client_visible = false where id = '${IDS.acmeDeliverableReview}'`);
-  await attackError(db, 'client re-homes deliverable into another tenant', dana,
-    `update public.deliverables set organization_id = '${globex}' where id = '${IDS.acmeDeliverableReview}'`);
+  await attackError(
+    db,
+    'CLIENT_MEMBER approves a deliverable',
+    eli,
+    `select public.approve_deliverable('${IDS.acmeDeliverableReview}', 'APPROVED', null)`,
+  );
+  await attackError(
+    db,
+    "approve ANOTHER tenant's deliverable",
+    dana,
+    `select public.approve_deliverable('${IDS.globexDeliverable}', 'APPROVED', null)`,
+  );
+  await attackError(
+    db,
+    'approve a deliverable not in CLIENT_REVIEW',
+    dana,
+    `select public.approve_deliverable('${IDS.acmeDeliverableInternal}', 'APPROVED', null)`,
+  );
+  await attackError(
+    db,
+    'client REJECTED outcome is refused',
+    dana,
+    `select public.approve_deliverable('${IDS.acmeDeliverableReview}', 'REJECTED', 'no')`,
+  );
+  await attackError(
+    db,
+    'client approval with forged approved_by',
+    dana,
+    `update public.deliverables set approved_by = '${ben}', status = 'APPROVED' where id = '${IDS.acmeDeliverableReview}'`,
+  );
+  await attackError(
+    db,
+    'client flips deliverable visibility flag',
+    dana,
+    `update public.deliverables set client_visible = false where id = '${IDS.acmeDeliverableReview}'`,
+  );
+  await attackError(
+    db,
+    'client re-homes deliverable into another tenant',
+    dana,
+    `update public.deliverables set organization_id = '${globex}' where id = '${IDS.acmeDeliverableReview}'`,
+  );
 
   /* ── 6. Unauthorized downloads (storage objects) ── */
-  await attack(db, 'download another tenant\'s storage object', dana,
-    `select 1 from storage.objects where name = '${globex}/internal-plan.pdf'`);
-  await attack(db, 'download a file hanging on an internal (task) parent', dana,
-    `select 1 from public.files where task_id is not null`);
+  await attack(
+    db,
+    "download another tenant's storage object",
+    dana,
+    `select 1 from storage.objects where name = '${globex}/internal-plan.pdf'`,
+  );
+  await attack(
+    db,
+    'download a file hanging on an internal (task) parent',
+    dana,
+    `select 1 from public.files where task_id is not null`,
+  );
 
   /* ── 7. Member-management ceilings (CLIENT_ADMIN boundaries) ── */
-  await attackError(db, 'CLIENT_ADMIN elevates another client to CLIENT_ADMIN', dana,
-    `select public.add_organization_member('${acme}', '${eli}', 'CLIENT_ADMIN', 'promote')`);
-  await attackError(db, 'CLIENT_ADMIN adds a member to ANOTHER tenant', dana,
-    `select public.add_organization_member('${globex}', '${eli}', 'CLIENT_MEMBER', null)`);
-  await attackError(db, 'CLIENT_ADMIN adds themselves', dana,
-    `select public.add_organization_member('${acme}', '${dana}', 'CLIENT_MEMBER', null)`);
-  await attackError(db, 'CLIENT_MEMBER manages members', eli,
-    `select public.add_organization_member('${acme}', '${fay}', 'CLIENT_MEMBER', null)`);
-  await attackError(db, 'CLIENT_ADMIN modifies a CLIENT_ADMIN row', dana,
+  await attackError(
+    db,
+    'CLIENT_ADMIN elevates another client to CLIENT_ADMIN',
+    dana,
+    `select public.add_organization_member('${acme}', '${eli}', 'CLIENT_ADMIN', 'promote')`,
+  );
+  await attackError(
+    db,
+    'CLIENT_ADMIN adds a member to ANOTHER tenant',
+    dana,
+    `select public.add_organization_member('${globex}', '${eli}', 'CLIENT_MEMBER', null)`,
+  );
+  await attackError(
+    db,
+    'CLIENT_ADMIN adds themselves',
+    dana,
+    `select public.add_organization_member('${acme}', '${dana}', 'CLIENT_MEMBER', null)`,
+  );
+  await attackError(
+    db,
+    'CLIENT_MEMBER manages members',
+    eli,
+    `select public.add_organization_member('${acme}', '${fay}', 'CLIENT_MEMBER', null)`,
+  );
+  await attackError(
+    db,
+    'CLIENT_ADMIN modifies a CLIENT_ADMIN row',
+    dana,
     `select public.update_organization_member(
        (select id from public.organization_memberships where organization_id = '${acme}' and user_id = '${dana}'),
-       'CLIENT_MEMBER')`);
-  await attackError(db, 'CLIENT_ADMIN promotes a CLIENT_MEMBER to CLIENT_ADMIN (update RPC)', dana,
+       'CLIENT_MEMBER')`,
+  );
+  await attackError(
+    db,
+    'CLIENT_ADMIN promotes a CLIENT_MEMBER to CLIENT_ADMIN (update RPC)',
+    dana,
     `select public.update_organization_member(
        (select id from public.organization_memberships where organization_id = '${acme}' and user_id = '${eli}'),
-       'CLIENT_ADMIN')`);
-  await attackError(db, 'CLIENT_ADMIN removes a CLIENT_ADMIN (even self-targeted row)', dana,
+       'CLIENT_ADMIN')`,
+  );
+  await attackError(
+    db,
+    'CLIENT_ADMIN removes a CLIENT_ADMIN (even self-targeted row)',
+    dana,
     `select public.remove_organization_member(
-       (select id from public.organization_memberships where organization_id = '${acme}' and user_id = '${dana}'))`);
+       (select id from public.organization_memberships where organization_id = '${acme}' and user_id = '${dana}'))`,
+  );
 
   /* ── 8. Admin / SUPER_ADMIN boundaries ── */
-  await attackError(db, 'ADMIN grants a platform role (SUPER_ADMIN only)', ben,
-    `select public.grant_platform_role('${ACTORS.cara}', 'SUPER_ADMIN', 'coup')`);
-  await attackError(db, 'CLIENT_ADMIN grants a platform role', dana,
-    `select public.grant_platform_role('${eli}', 'ADMIN', 'coup')`);
+  await attackError(
+    db,
+    'ADMIN grants a platform role (SUPER_ADMIN only)',
+    ben,
+    `select public.grant_platform_role('${ACTORS.cara}', 'SUPER_ADMIN', 'coup')`,
+  );
+  await attackError(
+    db,
+    'CLIENT_ADMIN grants a platform role',
+    dana,
+    `select public.grant_platform_role('${eli}', 'ADMIN', 'coup')`,
+  );
   // The NULL-guard probes: a CLIENT caller has NO platform role, so the
   // SUPER_ADMIN-only RPCs must deny them outright — not skip the guard when
   // is_super_admin() evaluated to NULL instead of false.
-  await attackError(db, 'CLIENT_ADMIN grants a platform role to an INTERNAL user', dana,
-    `select public.grant_platform_role('${ACTORS.cara}', 'ADMIN', 'coup')`);
-  await attackError(db, 'CLIENT_ADMIN revokes a platform role', dana,
-    `select public.revoke_platform_role('${ben}', 'coup')`);
-  await attackError(db, 'CLIENT_ADMIN erases another user', dana,
-    `select public.erase_user('${eli}', 'coup')`);
-  await attackError(db, 'CLIENT_ADMIN purges an organization', dana,
-    `select public.purge_organization('${acme}', 'acme-industrials')`);
-  await attackError(db, 'ADMIN purges an organization (SUPER_ADMIN only)', ben,
-    `select public.purge_organization('${acme}', 'acme-industrials')`);
-  await attackError(db, 'ADMIN erases a user (SUPER_ADMIN only)', ben,
-    `select public.erase_user('${eli}', 'test')`);
-  await attackError(db, 'CLIENT_ADMIN submits internal review (staff only)', dana,
-    `select public.submit_deliverable_review('${IDS.acmeDeliverableReview}', 'APPROVED', null)`);
-  await attackError(db, 'CLIENT_ADMIN publishes a report (staff only)', dana,
-    `select public.publish_report('${IDS.acmeReport}', true)`);
+  await attackError(
+    db,
+    'CLIENT_ADMIN grants a platform role to an INTERNAL user',
+    dana,
+    `select public.grant_platform_role('${ACTORS.cara}', 'ADMIN', 'coup')`,
+  );
+  await attackError(
+    db,
+    'CLIENT_ADMIN revokes a platform role',
+    dana,
+    `select public.revoke_platform_role('${ben}', 'coup')`,
+  );
+  await attackError(
+    db,
+    'CLIENT_ADMIN erases another user',
+    dana,
+    `select public.erase_user('${eli}', 'coup')`,
+  );
+  await attackError(
+    db,
+    'CLIENT_ADMIN purges an organization',
+    dana,
+    `select public.purge_organization('${acme}', 'acme-industrials')`,
+  );
+  await attackError(
+    db,
+    'ADMIN purges an organization (SUPER_ADMIN only)',
+    ben,
+    `select public.purge_organization('${acme}', 'acme-industrials')`,
+  );
+  await attackError(
+    db,
+    'ADMIN erases a user (SUPER_ADMIN only)',
+    ben,
+    `select public.erase_user('${eli}', 'test')`,
+  );
+  await attackError(
+    db,
+    'CLIENT_ADMIN submits internal review (staff only)',
+    dana,
+    `select public.submit_deliverable_review('${IDS.acmeDeliverableReview}', 'APPROVED', null)`,
+  );
+  await attackError(
+    db,
+    'CLIENT_ADMIN publishes a report (staff only)',
+    dana,
+    `select public.publish_report('${IDS.acmeReport}', true)`,
+  );
 
   /* ── 9. Notifications ── */
-  await attack(db, 'read another user\'s notifications', dana,
-    `select 1 from public.notifications where recipient_user_id = '${fay}'`);
-  await attack(db, 'update another user\'s notification read_at', dana,
-    `update public.notifications set read_at = now() where recipient_user_id = '${fay}'`);
-  await attackError(db, 'insert a notification (server-emission only)', dana,
+  await attack(
+    db,
+    "read another user's notifications",
+    dana,
+    `select 1 from public.notifications where recipient_user_id = '${fay}'`,
+  );
+  await attack(
+    db,
+    "update another user's notification read_at",
+    dana,
+    `update public.notifications set read_at = now() where recipient_user_id = '${fay}'`,
+  );
+  await attackError(
+    db,
+    'insert a notification (server-emission only)',
+    dana,
     `insert into public.notifications
        (recipient_user_id, organization_id, notification_type, severity, title, body, subject_entity, subject_id)
-     values ('${eli}', '${acme}', 'REPORT_PUBLISHED', 'INFO', 'pwn', 'pwn', 'report', '${IDS.acmeReport}')`);
+     values ('${eli}', '${acme}', 'REPORT_PUBLISHED', 'INFO', 'pwn', 'pwn', 'report', '${IDS.acmeReport}')`,
+  );
 
   /* ── 10. ID manipulation / predictable IDs / ownership ── */
-  await attack(db, 'guess another tenant\'s project id', dana,
-    `select 1 from public.projects where id = '${IDS.globexProject}'`);
-  await attack(db, 'guess another tenant\'s deliverable id', dana,
-    `select 1 from public.deliverables where id = '${IDS.globexDeliverable}'`);
-  await attack(db, 'edit someone else\'s file (ownership)', eli,
-    `update public.files set file_name = 'stolen.docx' where uploaded_by = '${dana}'`);
+  await attack(
+    db,
+    "guess another tenant's project id",
+    dana,
+    `select 1 from public.projects where id = '${IDS.globexProject}'`,
+  );
+  await attack(
+    db,
+    "guess another tenant's deliverable id",
+    dana,
+    `select 1 from public.deliverables where id = '${IDS.globexDeliverable}'`,
+  );
+  await attack(
+    db,
+    "edit someone else's file (ownership)",
+    eli,
+    `update public.files set file_name = 'stolen.docx' where uploaded_by = '${dana}'`,
+  );
   // A client forging their upload straight to CLEAN + visible must NOT land
   // visible: the upload itself is legitimate (it is their own tenant), but the
   // insert guard forces the row PENDING + invisible, so the client read gate
@@ -477,49 +765,126 @@ async function main() {
       actual = `error: ${String(error.message).split('\n')[0].slice(0, 90)}`;
     }
     if (!pass) failures += 1;
-    results.push({ label: 'forged clean+visible file upload stays invisible (insert guard)', expected: 'blocked', actual, pass });
+    results.push({
+      label: 'forged clean+visible file upload stays invisible (insert guard)',
+      expected: 'blocked',
+      actual,
+      pass,
+    });
   }
-  await attack(db, 'edit someone else\'s comment (ownership)', eli,
-    `update public.comments set body = 'pwned' where author_user_id = '${dana}'`);
-  await attack(db, 'edit someone else\'s profile (self-only)', eli,
-    `update public.profiles set full_name = 'pwned' where id = '${dana}'`);
-  await attackError(db, 'escalate own account status column', eli,
-    `update public.profiles set account_status = 'ACTIVE' where id = '${eli}'`);
-  await attackError(db, 'read another profile\'s private columns', dana,
-    `select phone from public.profiles where id = '${fay}'`);
+  await attack(
+    db,
+    "edit someone else's comment (ownership)",
+    eli,
+    `update public.comments set body = 'pwned' where author_user_id = '${dana}'`,
+  );
+  await attack(
+    db,
+    "edit someone else's profile (self-only)",
+    eli,
+    `update public.profiles set full_name = 'pwned' where id = '${dana}'`,
+  );
+  await attackError(
+    db,
+    'escalate own account status column',
+    eli,
+    `update public.profiles set account_status = 'ACTIVE' where id = '${eli}'`,
+  );
+  await attackError(
+    db,
+    "read another profile's private columns",
+    dana,
+    `select phone from public.profiles where id = '${fay}'`,
+  );
 
   /* ── 11. Positive controls (legitimate operations still work) ── */
-  await allowed(db, 'CLIENT_ADMIN reads own organization', dana,
-    `select 1 from public.organizations where id = '${acme}'`);
-  await allowed(db, 'CLIENT_ADMIN reads own visible project', dana,
-    `select 1 from public.projects where id = '${IDS.acmeProject}'`);
-  await allowed(db, 'CLIENT_ADMIN reads own client-visible deliverable', dana,
-    `select 1 from public.deliverables where id = '${IDS.acmeDeliverableReview}'`);
-  await allowed(db, 'CLIENT_ADMIN reads own published report', dana,
-    `select 1 from public.reports where id = '${IDS.acmeReport}'`);
-  await allowed(db, 'CLIENT_ADMIN reads own metrics', dana,
-    `select 1 from public.metrics where organization_id = '${acme}'`);
-  await allowed(db, 'CLIENT_ADMIN reads own notifications', dana,
-    `select 1 from public.notifications where recipient_user_id = '${dana}'`);
-  await allowed(db, 'CLIENT_ADMIN approves own CLIENT_REVIEW deliverable', dana,
-    `select public.approve_deliverable('${IDS.acmeDeliverableReview}', 'APPROVED', null)`);
-  await allowed(db, 'CLIENT_ADMIN invites a CLIENT_MEMBER (add_organization_member)', dana,
-    `select public.add_organization_member('${acme}', '${fay}', 'CLIENT_MEMBER', 'new hire')`);
-  await allowed(db, 'staff (ADMIN) elevates a client to CLIENT_ADMIN', ben,
-    `select public.add_organization_member('${globex}', '${eli}', 'CLIENT_ADMIN', 'promotion')`);
-  await allowed(db, 'CLIENT_ADMIN edits own organization settings', dana,
-    `update public.organization_settings set timezone = 'America/New_York' where organization_id = '${acme}'`);
-  await allowed(db, 'SUPER_ADMIN revokes a platform role (legitimate path)', ACTORS.ada,
-    `select public.revoke_platform_role('${ben}', 'offboarding')`);
-  await allowed(db, 'CLIENT_MEMBER posts a non-internal comment on a visible deliverable', eli,
+  await allowed(
+    db,
+    'CLIENT_ADMIN reads own organization',
+    dana,
+    `select 1 from public.organizations where id = '${acme}'`,
+  );
+  await allowed(
+    db,
+    'CLIENT_ADMIN reads own visible project',
+    dana,
+    `select 1 from public.projects where id = '${IDS.acmeProject}'`,
+  );
+  await allowed(
+    db,
+    'CLIENT_ADMIN reads own client-visible deliverable',
+    dana,
+    `select 1 from public.deliverables where id = '${IDS.acmeDeliverableReview}'`,
+  );
+  await allowed(
+    db,
+    'CLIENT_ADMIN reads own published report',
+    dana,
+    `select 1 from public.reports where id = '${IDS.acmeReport}'`,
+  );
+  await allowed(
+    db,
+    'CLIENT_ADMIN reads own metrics',
+    dana,
+    `select 1 from public.metrics where organization_id = '${acme}'`,
+  );
+  await allowed(
+    db,
+    'CLIENT_ADMIN reads own notifications',
+    dana,
+    `select 1 from public.notifications where recipient_user_id = '${dana}'`,
+  );
+  await allowed(
+    db,
+    'CLIENT_ADMIN approves own CLIENT_REVIEW deliverable',
+    dana,
+    `select public.approve_deliverable('${IDS.acmeDeliverableReview}', 'APPROVED', null)`,
+  );
+  await allowed(
+    db,
+    'CLIENT_ADMIN invites a CLIENT_MEMBER (add_organization_member)',
+    dana,
+    `select public.add_organization_member('${acme}', '${fay}', 'CLIENT_MEMBER', 'new hire')`,
+  );
+  await allowed(
+    db,
+    'staff (ADMIN) elevates a client to CLIENT_ADMIN',
+    ben,
+    `select public.add_organization_member('${globex}', '${eli}', 'CLIENT_ADMIN', 'promotion')`,
+  );
+  await allowed(
+    db,
+    'CLIENT_ADMIN edits own organization settings',
+    dana,
+    `update public.organization_settings set timezone = 'America/New_York' where organization_id = '${acme}'`,
+  );
+  await allowed(
+    db,
+    'SUPER_ADMIN revokes a platform role (legitimate path)',
+    ACTORS.ada,
+    `select public.revoke_platform_role('${ben}', 'offboarding')`,
+  );
+  await allowed(
+    db,
+    'CLIENT_MEMBER posts a non-internal comment on a visible deliverable',
+    eli,
     `insert into public.comments (organization_id, deliverable_id, author_user_id, body, is_internal)
-     values ('${acme}', '${IDS.acmeDeliverableReview}', '${eli}', 'looks good', false)`);
-  await allowed(db, 'author edits own comment', eli,
-    `update public.comments set body = 'edited' where author_user_id = '${eli}'`);
-  await allowed(db, 'CLIENT uploads a file to their own organization', dana,
+     values ('${acme}', '${IDS.acmeDeliverableReview}', '${eli}', 'looks good', false)`,
+  );
+  await allowed(
+    db,
+    'author edits own comment',
+    eli,
+    `update public.comments set body = 'edited' where author_user_id = '${eli}'`,
+  );
+  await allowed(
+    db,
+    'CLIENT uploads a file to their own organization',
+    dana,
     `insert into public.files
        (organization_id, storage_path, file_name, mime_type, size_bytes, uploaded_by)
-     values ('${acme}', '${acme}/upload-ok.txt', 'upload-ok.txt', 'text/plain', 1, '${dana}')`);
+     values ('${acme}', '${acme}/upload-ok.txt', 'upload-ok.txt', 'text/plain', 1, '${dana}')`,
+  );
 
   // ---------------------------------------------------------------------------
   // Report
