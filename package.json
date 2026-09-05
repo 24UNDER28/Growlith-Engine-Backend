@@ -1,0 +1,46 @@
+{
+  "name": "growlith-engine-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Growlith Academy portal — admin and client dashboards plus the server-side API that backs them. Next.js, TypeScript, Supabase (PostgreSQL, Auth, Storage) with PostgreSQL RLS as the final authorization boundary.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "packageManager": "npm@10.9.8",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check:client-exposure": "node scripts/check-client-exposure.mjs",
+    "db:types": "supabase gen types typescript --local --schema public > src/types/database.ts",
+    "validate": "npm run typecheck && npm run lint && npm run test && npm run build && npm run check:client-exposure"
+  },
+  "dependencies": {
+    "@supabase/ssr": "0.12.6",
+    "@supabase/supabase-js": "2.115.0",
+    "next": "16.3.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "0.0.1",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.4",
+    "prettier": "3.9.6",
+    "typescript": "5.9.3",
+    "vitest": "5.0.0"
+  }
+}

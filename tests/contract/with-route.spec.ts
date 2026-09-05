@@ -1,0 +1,428 @@
+import { z } from 'zod';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import { ErrorCode } from '@/lib/types/error-codes';
+import { REQUEST_ID_HEADER } from '@/lib/utils/request-id';
+import { ApiError } from '@/server/api/errors';
+import { MAX_JSON_BODY_BYTES, withRoute, type NextRouteContext } from '@/server/api/with-route';
+
+/**
+ * Contract tests for the single API entry point.
+ *
+ * The point of `withRoute` is that validation, error mapping and correlation are
+ * structural rather than per-handler discipline. These tests therefore assert
+ * the *guarantees* a consumer relies on — not the handler's own logic, which is
+ * covered by service tests in later phases.
+ *
+ * Authentication and authorization are NOT tested here because they are not
+ * implemented in Phase 1. Adding a passing test for a control that does not yet
+ * exist would be worse than no test (Rule 14).
+ */
+
+const VALID_UUID = '3f2b8c1a-9d4e-4a7b-8c2f-1e6d5b4a3920';
+
+let originalLogLevel: string | undefined;
+
+beforeAll(() => {
+  originalLogLevel = process.env.LOG_LEVEL;
+  process.env.LOG_LEVEL = 'silent';
+});
+
+afterAll(() => {
+  if (originalLogLevel === undefined) {
+    delete process.env.LOG_LEVEL;
+  } else {
+    process.env.LOG_LEVEL = originalLogLevel;
+  }
+});
+
+function jsonRequest(
+  method: string,
+  url: string,
+  body: unknown,
+  init?: { rawBody?: string; headers?: Record<string, string> },
+): Request {
+  return new Request(url, {
+    method,
+    headers: { 'content-type': 'application/json', ...init?.headers },
+    body: init?.rawBody ?? JSON.stringify(body),
+  });
+}
+
+async function readJson(response: Response): Promise<Record<string, unknown>> {
+  return (await response.json()) as Record<string, unknown>;
+}
+
+describe('successful responses', () => {
+  const route = withRoute({
+    method: 'GET',
+    summary: 'return a greeting',
+    handler: async () => ({ greeting: 'hello' }),
+  });
+
+  it('wraps the handler result in the success envelope', async () => {
+    const response = await route(new Request('http://localhost/api/v1/thing'));
+    const body = await readJson(response);
+
+    expect(response.status).toBe(200);
+    expect(body.data).toEqual({ greeting: 'hello' });
+    expect(body.meta).toMatchObject({ requestId: expect.any(String) });
+    expect(typeof (body.meta as { tookMs: number }).tookMs).toBe('number');
+  });
+
+  it('returns the request id in both the envelope and the response header', async () => {
+    const response = await route(new Request('http://localhost/api/v1/thing'));
+    const body = await readJson(response);
+
+    expect(response.headers.get(REQUEST_ID_HEADER)).toBe(
+      (body.meta as { requestId: string }).requestId,
+    );
+  });
+
+  it('reuses a well-formed inbound request id for end-to-end correlation', async () => {
+    const response = await route(
+      new Request('http://localhost/api/v1/thing', {
+        headers: { [REQUEST_ID_HEADER]: VALID_UUID },
+      }),
+    );
+    expect(response.headers.get(REQUEST_ID_HEADER)).toBe(VALID_UUID);
+  });
+
+  it('ignores a malformed inbound request id instead of echoing attacker input', async () => {
+    const response = await route(
+      new Request('http://localhost/api/v1/thing', {
+        headers: { [REQUEST_ID_HEADER]: 'forged-id' },
+      }),
+    );
+    const header = response.headers.get(REQUEST_ID_HEADER) ?? '';
+    expect(header).not.toBe('forged-id');
+    expect(header).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('forbids caching of tenant-scoped responses', async () => {
+    const response = await route(new Request('http://localhost/api/v1/thing'));
+    expect(response.headers.get('Cache-Control')).toContain('no-store');
+  });
+
+  it('honours a declared success status', async () => {
+    const created = withRoute({
+      method: 'POST',
+      summary: 'create a thing',
+      successStatus: 201,
+      handler: async () => ({ id: 'new' }),
+    });
+
+    const response = await created(
+      jsonRequest('POST', 'http://localhost/api/v1/thing', undefined, { rawBody: '' }),
+    );
+    expect(response.status).toBe(201);
+  });
+
+  it('emits no body for 204', async () => {
+    const deleted = withRoute({
+      method: 'DELETE',
+      summary: 'delete a thing',
+      successStatus: 204,
+      handler: async () => undefined,
+    });
+
+    const response = await deleted(
+      new Request('http://localhost/api/v1/thing', { method: 'DELETE' }),
+    );
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe('');
+  });
+});
+
+describe('declaration/export mismatch guard', () => {
+  // SCOPE NOTE, verified against a running production build: Next.js rejects a
+  // method the route file does not export BEFORE invoking the handler, so a
+  // `POST` to a `GET`-only route never reaches `withRoute` and returns an
+  // empty-bodied 405 from the framework. This suite calls the handler directly,
+  // so what it proves is the narrower — but still real — property that a route
+  // declaring one method and exported as another fails loudly instead of
+  // silently serving the wrong semantics.
+  const route = withRoute({
+    method: 'POST',
+    summary: 'create a thing',
+    handler: async () => ({ ok: true }),
+  });
+
+  it('rejects a mismatched method with 405 and an Allow header', async () => {
+    const response = await route(new Request('http://localhost/api/v1/thing', { method: 'GET' }));
+    const body = await readJson(response);
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get('Allow')).toBe('POST');
+    expect((body.error as { code: string }).code).toBe(ErrorCode.MethodNotAllowed);
+  });
+});
+
+describe('body validation', () => {
+  const schema = z
+    .object({ title: z.string().min(1), priority: z.number().int().optional() })
+    .strict();
+  type Body = z.infer<typeof schema>;
+
+  const route = withRoute<undefined, undefined, Body, { title: string }>({
+    method: 'POST',
+    summary: 'create a task',
+    bodySchema: schema,
+    handler: async ({ body }) => ({ title: body.title }),
+  });
+
+  it('passes a valid body to the handler', async () => {
+    const response = await route(
+      jsonRequest('POST', 'http://localhost/api/v1/tasks', { title: 'Audit hreflang' }),
+    );
+    expect(response.status).toBe(200);
+    expect((await readJson(response)).data).toEqual({ title: 'Audit hreflang' });
+  });
+
+  it('rejects an invalid body with 422 and field-level details', async () => {
+    const response = await route(
+      jsonRequest('POST', 'http://localhost/api/v1/tasks', { title: 42 }),
+    );
+    const body = await readJson(response);
+
+    expect(response.status).toBe(422);
+    const error = body.error as { code: string; details: Array<{ path: string }> };
+    expect(error.code).toBe(ErrorCode.ValidationFailed);
+    expect(error.details[0]?.path).toBe('title');
+  });
+
+  it('rejects unknown keys, which is what makes mass assignment impossible', async () => {
+    // A client smuggling `organizationId` or `role` must be rejected outright,
+    // not silently stripped: silent stripping hides an attack attempt that
+    // should appear in the log as a 422.
+    const response = await route(
+      jsonRequest('POST', 'http://localhost/api/v1/tasks', {
+        title: 'ok',
+        organizationId: 'other-tenant',
+      }),
+    );
+    const body = await readJson(response);
+
+    expect(response.status).toBe(422);
+    expect(JSON.stringify(body)).toContain('organizationId');
+  });
+
+  it('rejects malformed JSON with 400', async () => {
+    const response = await route(
+      jsonRequest('POST', 'http://localhost/api/v1/tasks', undefined, { rawBody: '{not json' }),
+    );
+    const body = await readJson(response);
+
+    expect(response.status).toBe(400);
+    expect((body.error as { code: string }).code).toBe(ErrorCode.MalformedRequest);
+  });
+
+  it('rejects an absent body when one is required', async () => {
+    const response = await route(
+      jsonRequest('POST', 'http://localhost/api/v1/tasks', undefined, { rawBody: '' }),
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects an oversized body with 413 and points at the upload path', async () => {
+    const oversized = 'x'.repeat(MAX_JSON_BODY_BYTES + 1024);
+    const response = await route(
+      jsonRequest('POST', 'http://localhost/api/v1/tasks', undefined, {
+        rawBody: JSON.stringify({ title: oversized }),
+      }),
+    );
+    const body = await readJson(response);
+
+    expect(response.status).toBe(413);
+    expect((body.error as { code: string }).code).toBe(ErrorCode.PayloadTooLarge);
+    expect((body.error as { message: string }).message).toContain('signed URL');
+  });
+
+  it('refuses a body whose declared Content-Length exceeds the limit, without buffering it', async () => {
+    // The test above proves the post-read check works, but that check runs *after*
+    // `request.text()` has allocated the entire body — so on its own the limit
+    // would fail at precisely the moment it exists to help: a 500 MB upload would
+    // be fully resident in the heap before being rejected. This asserts the cheap
+    // path, using a tiny body that merely *declares* an oversized length.
+    const response = await route(
+      jsonRequest('POST', 'http://localhost/api/v1/tasks', undefined, {
+        rawBody: JSON.stringify({ title: 'small body, large claim' }),
+        headers: { 'content-length': String(MAX_JSON_BODY_BYTES + 1) },
+      }),
+    );
+    const body = await readJson(response);
+
+    expect(response.status).toBe(413);
+    expect((body.error as { code: string }).code).toBe(ErrorCode.PayloadTooLarge);
+    expect((body.error as { message: string }).message).toContain('signed URL');
+  });
+
+  it('still accepts a body that honestly declares a length within the limit', async () => {
+    // Guards the other direction: the pre-check must not become a reason valid
+    // requests fail. A correct Content-Length is the normal case for every real
+    // client, so this is the path production traffic actually takes.
+    const payload = JSON.stringify({ title: 'Audit hreflang' });
+    const response = await route(
+      jsonRequest('POST', 'http://localhost/api/v1/tasks', undefined, {
+        rawBody: payload,
+        headers: { 'content-length': String(Buffer.byteLength(payload, 'utf8')) },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect((await readJson(response)).data).toEqual({ title: 'Audit hreflang' });
+  });
+
+  it('rejects a malformed Content-Length with 400 rather than guessing', async () => {
+    // A nonsense length could be read as 0, which would let an arbitrarily large
+    // body through the pre-check. Refusing it is cheaper than interpreting it, and
+    // the post-read check remains as the backstop for a client that omits the
+    // header entirely (Transfer-Encoding: chunked).
+    const response = await route(
+      jsonRequest('POST', 'http://localhost/api/v1/tasks', undefined, {
+        rawBody: JSON.stringify({ title: 'whatever' }),
+        headers: { 'content-length': 'not-a-number' },
+      }),
+    );
+    const body = await readJson(response);
+
+    expect(response.status).toBe(400);
+    expect((body.error as { code: string }).code).toBe(ErrorCode.MalformedRequest);
+  });
+
+  it('rejects a negative Content-Length with 400', async () => {
+    const response = await route(
+      jsonRequest('POST', 'http://localhost/api/v1/tasks', undefined, {
+        rawBody: JSON.stringify({ title: 'whatever' }),
+        headers: { 'content-length': '-1' },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+  });
+});
+
+describe('query and parameter validation', () => {
+  it('validates the query string', async () => {
+    const schema = z.object({ limit: z.coerce.number().int().min(1).max(100).optional() }).strict();
+    const route = withRoute<
+      undefined,
+      z.infer<typeof schema>,
+      undefined,
+      { limit: number | undefined }
+    >({
+      method: 'GET',
+      summary: 'list things',
+      querySchema: schema,
+      handler: async ({ query }) => ({ limit: query.limit }),
+    });
+
+    const ok = await route(new Request('http://localhost/api/v1/things?limit=50'));
+    expect((await readJson(ok)).data).toEqual({ limit: 50 });
+
+    const bad = await route(new Request('http://localhost/api/v1/things?limit=abc'));
+    expect(bad.status).toBe(422);
+
+    const unknown = await route(new Request('http://localhost/api/v1/things?limitx=10000'));
+    expect(unknown.status).toBe(422);
+  });
+
+  it('awaits and validates Next.js dynamic route params', async () => {
+    const schema = z.object({ orgId: z.uuid() }).strict();
+    const route = withRoute<z.infer<typeof schema>, undefined, undefined, { orgId: string }>({
+      method: 'GET',
+      summary: 'read one organization',
+      paramSchema: schema,
+      handler: async ({ params }) => ({ orgId: params.orgId }),
+    });
+
+    const context: NextRouteContext = { params: Promise.resolve({ orgId: VALID_UUID }) };
+    const ok = await route(
+      new Request(`http://localhost/api/v1/organizations/${VALID_UUID}`),
+      context,
+    );
+    expect((await readJson(ok)).data).toEqual({ orgId: VALID_UUID });
+
+    const badContext: NextRouteContext = { params: Promise.resolve({ orgId: 'not-a-uuid' }) };
+    const bad = await route(
+      new Request('http://localhost/api/v1/organizations/not-a-uuid'),
+      badContext,
+    );
+    expect(bad.status).toBe(422);
+  });
+});
+
+describe('error mapping', () => {
+  it('maps a thrown ApiError to its status, code and message', async () => {
+    const route = withRoute({
+      method: 'GET',
+      summary: 'fail with a domain error',
+      handler: async () => {
+        throw ApiError.conflict('That code is already in use.');
+      },
+    });
+
+    const response = await route(new Request('http://localhost/api/v1/thing'));
+    const body = await readJson(response);
+
+    expect(response.status).toBe(409);
+    expect(body.error).toMatchObject({
+      code: ErrorCode.Conflict,
+      message: 'That code is already in use.',
+      requestId: expect.any(String),
+    });
+  });
+
+  it('downgrades an unexpected throw to a generic 500 without leaking the cause', async () => {
+    const route = withRoute({
+      method: 'GET',
+      summary: 'fail unexpectedly',
+      handler: async () => {
+        throw new Error('relation "public.deliverables" does not exist');
+      },
+    });
+
+    const response = await route(new Request('http://localhost/api/v1/thing'));
+    const body = await readJson(response);
+    const serialized = JSON.stringify(body);
+
+    expect(response.status).toBe(500);
+    expect((body.error as { code: string }).code).toBe(ErrorCode.Internal);
+    expect(serialized).not.toContain('public.deliverables');
+    expect(serialized).not.toContain('does not exist');
+  });
+
+  it('still correlates a 500 to its request id so it can be diagnosed', async () => {
+    const route = withRoute({
+      method: 'GET',
+      summary: 'fail unexpectedly',
+      handler: async () => {
+        throw new Error('boom');
+      },
+    });
+
+    const response = await route(
+      new Request('http://localhost/api/v1/thing', {
+        headers: { [REQUEST_ID_HEADER]: VALID_UUID },
+      }),
+    );
+    const body = await readJson(response);
+
+    expect((body.error as { requestId: string }).requestId).toBe(VALID_UUID);
+  });
+
+  it('maps a non-Error throwable without crashing the handler', async () => {
+    const route = withRoute({
+      method: 'GET',
+      summary: 'throw a string',
+      handler: async () => {
+        // Deliberately pathological: a non-Error throwable must still be mapped
+        // to a generic 500 rather than escaping to the caller.
+        throw 'a raw string';
+      },
+    });
+
+    const response = await route(new Request('http://localhost/api/v1/thing'));
+    expect(response.status).toBe(500);
+  });
+});
