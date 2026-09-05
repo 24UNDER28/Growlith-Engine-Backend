@@ -1,0 +1,116 @@
+# Supabase local stack configuration — Phase 3 (Auth)
+#
+# WHAT THIS FILE IS
+# The configuration for the LOCAL Supabase stack (`supabase start`). The hosted
+# project is configured to mirror every value here — the runbook section
+# "Supabase Auth project configuration" in docs/runbooks/local-development.md
+# is the checklist for that, and the two must be kept equal by procedure
+# (design §H: Supabase project configuration is NOT application env).
+#
+# Phase 3 posture (docs/architecture/authentication.md §H):
+#   - new sign-ups DISABLED — accounts exist only by invitation;
+#   - email confirmations ENABLED (the invite link confirms the address);
+#   - JWT expiry 3600s; refresh-token rotation ON with the 10s reuse interval;
+#   - TOTP MFA enabled (mandatory for SUPER_ADMIN/ADMIN at the application
+#     layer — §6c — the auth server just permits it);
+#   - minimum password length 12; the password POLICY lives here, never in
+#     application code;
+#   - mail-OTP expiry 7 days, matching `invitations.expires_at`
+#     (verify-at-implementation note below);
+#   - redirect allow-list contains exactly the confirm-route pattern.
+#
+# VERIFY-AT-IMPLEMENTATION (ADR-0022 evidence rule; could not be executed in
+# the Phase 3 sandbox — no Docker): `supabase start` must boot with these
+# values and the invite/recovery templates must render the confirm-route
+# links. That check belongs to the first environment with the CLI + Docker
+# available (CI or a developer machine), and the runbook records it. Two
+# behaviours to verify against the pinned GoTrue:
+#   1. a second `inviteUserByEmail` for an UNCONFIRMED user re-sends the
+#      invite (the re-issue path depends on it);
+#   2. GoTrue has ONE mail-OTP expiry for every email type. It is set to 7
+#      days so invite links live as long as the invitation row; recovery links
+#      therefore also live 7 days rather than the design's 1 hour. The app
+#      token in the invitation row is unaffected, and the residual (long-lived
+#      recovery links) is recorded for the Phase 6 security pass.
+
+project_id = "growlith-engine"
+
+[api]
+enabled = true
+port = 54321
+# Only `public` is exposed. In particular the `growlith` schema (trigger
+# bodies) and `growlith_migrations` (the runner's ledger) are NOT addressable.
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+# The ONE route email links may land on. Everything else — deep links, other
+# hosts — must be refused by the auth server itself.
+additional_redirect_urls = ["http://localhost:3000/auth/confirm"]
+# Accounts exist by invitation only.
+enable_signup = false
+enable_anonymous_sign_ins = false
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+# Password policy lives HERE (§H): minimum length 12, leaked-password
+# protection where the platform allows it.
+minimum_password_length = 12
+
+[auth.email]
+# The invite link is the email confirmation (§10): acceptance proves control
+# of the mailbox.
+enable_signup = false
+enable_confirmations = true
+double_confirm_changes = true
+secure_password_change = true
+max_frequency = "30s"
+otp_length = 6
+# 7 days — the invite window (see the verify-at-implementation note above).
+otp_expiry = 604800
+
+[auth.email.template.invitation]
+subject = "Your invitation to Growlith Engine"
+content_path = "./supabase/templates/invitation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your Growlith Engine password"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.totp]
+enabled = true
+issuer = "Growlith Engine"
+
+[auth.mfa]
+max_enrolled_factors = 10
+
+[auth.sms]
+enable_confirmations = false
+enable_signup = false
+
+# Local SMTP: the built-in mailer + studio inbox (Mailpit) receive every
+# invite/recovery email, so the flows are testable without external mail.
+[auth.email.smtp]
+enabled = false
+host = "localhost"
+port = 54324
+user = ""
+pass = ""
+admin_email = ""
+sender_name = "Growlith Engine"
+sender_email = "auth@growlithacademy.com"
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"

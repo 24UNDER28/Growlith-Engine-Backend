@@ -4,6 +4,7 @@ import {
   ENTITY_KINDS,
   HIERARCHY_ENTITIES,
   HIERARCHY_PARENT,
+  IDENTITY_ENTITIES,
   SUPPORTING_ENTITIES,
   TENANT_ROOT,
   TENANT_SCOPED_ENTITIES,
@@ -299,7 +300,22 @@ describe('entity hierarchy — the containment model RLS is built on', () => {
     );
     expect(overlap).toEqual([]);
     expect(new Set(ENTITY_KINDS).size, 'entity kinds must be unique').toBe(ENTITY_KINDS.length);
-    expect([...ENTITY_KINDS]).toEqual([...HIERARCHY_ENTITIES, ...SUPPORTING_ENTITIES]);
+    expect([...ENTITY_KINDS]).toEqual([
+      ...HIERARCHY_ENTITIES,
+      ...SUPPORTING_ENTITIES,
+      ...IDENTITY_ENTITIES,
+    ]);
+  });
+
+  it('keeps identity entities global — a profile is never tenant-scoped', () => {
+    // `profile` arrives in Phase 3 as the audit subject for authentication
+    // events. It must stay outside BOTH the hierarchy and the supporting set,
+    // and it must never appear among tenant-scoped entities: a person exists
+    // once, globally, not once per tenant.
+    expect([...IDENTITY_ENTITIES]).toEqual(['profile']);
+    expect(HIERARCHY_ENTITIES).not.toContain('profile');
+    expect(SUPPORTING_ENTITIES).not.toContain('profile');
+    expect(TENANT_SCOPED_ENTITIES).not.toContain('profile');
   });
 
   it('declares a parent for every hierarchy entity and exactly one tenant root', () => {
@@ -348,12 +364,16 @@ describe('entity hierarchy — the containment model RLS is built on', () => {
     expect(parentOf('organization')).toBeNull();
   });
 
-  it('treats every entity except the tenant root as tenant-scoped', () => {
+  it('treats every non-identity entity except the tenant root as tenant-scoped', () => {
     // This is the exact set of tables that must carry `organization_id` and be
     // covered by a tenant-isolation RLS policy in Phase 2. Asserting it as a
     // derivation of the vocabulary means a new entity cannot be added without
-    // someone deciding, explicitly, whether it is tenant-scoped.
-    const expected = ENTITY_KINDS.filter((entity) => entity !== TENANT_ROOT);
+    // someone deciding, explicitly, whether it is tenant-scoped. Identity
+    // entities (Phase 3) are global by design and excluded from the derivation.
+    const expected = ENTITY_KINDS.filter(
+      (entity) =>
+        entity !== TENANT_ROOT && !(IDENTITY_ENTITIES as readonly string[]).includes(entity),
+    );
     expect([...TENANT_SCOPED_ENTITIES].sort()).toEqual([...expected].sort());
     expect(TENANT_SCOPED_ENTITIES).not.toContain(TENANT_ROOT);
   });

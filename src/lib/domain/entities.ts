@@ -37,7 +37,21 @@ export const SUPPORTING_ENTITIES = ['comment', 'attachment', 'metric', 'notifica
 
 export type SupportingEntity = (typeof SUPPORTING_ENTITIES)[number];
 
-export const ENTITY_KINDS = [...HIERARCHY_ENTITIES, ...SUPPORTING_ENTITIES] as const;
+/**
+ * Identity entities. `profile` arrives in Phase 3: authentication events
+ * (login, logout, status changes, MFA) need an audit subject, and the subject
+ * of every such event is a person. It is deliberately NOT part of the hierarchy
+ * or the supporting set — a profile is global, never tenant-scoped.
+ */
+export const IDENTITY_ENTITIES = ['profile'] as const;
+
+export type IdentityEntity = (typeof IDENTITY_ENTITIES)[number];
+
+export const ENTITY_KINDS = [
+  ...HIERARCHY_ENTITIES,
+  ...SUPPORTING_ENTITIES,
+  ...IDENTITY_ENTITIES,
+] as const;
 export type EntityKind = (typeof ENTITY_KINDS)[number];
 
 /**

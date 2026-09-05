@@ -90,6 +90,46 @@ export class ApiError extends Error {
     return new ApiError(401, ErrorCode.Unauthenticated, message);
   }
 
+  /**
+   * Credentials did not verify. The message is deliberately identical for an
+   * unknown address and a wrong password, so the endpoint cannot be used to
+   * enumerate which addresses hold accounts (design §3, §12).
+   */
+  static invalidCredentials(
+    message = 'The email address or password is incorrect.',
+    cause?: unknown,
+  ): ApiError {
+    return new ApiError(401, ErrorCode.InvalidCredentials, message, { cause });
+  }
+
+  /**
+   * The account is offboarded. 401 with a named code so the account holder
+   * learns their own state; nothing here reveals whether an address exists
+   * (wrong-password attempts never reach this code).
+   */
+  static accountDeactivated(
+    message = 'This account has been deactivated.',
+    cause?: unknown,
+  ): ApiError {
+    return new ApiError(401, ErrorCode.AccountDeactivated, message, { cause });
+  }
+
+  /** The invitation is still pending; only acceptance may proceed. */
+  static invitationPending(
+    message = 'This account has not accepted its invitation yet.',
+    cause?: unknown,
+  ): ApiError {
+    return new ApiError(403, ErrorCode.InvitationPending, message, { cause });
+  }
+
+  /** The session is alive at aal1 but the surface requires the second factor. */
+  static mfaRequired(
+    message = 'A second authentication factor is required for this action.',
+    cause?: unknown,
+  ): ApiError {
+    return new ApiError(401, ErrorCode.MfaRequired, message, { cause });
+  }
+
   static forbidden(message = 'You do not have permission to perform this action.'): ApiError {
     return new ApiError(403, ErrorCode.Forbidden, message);
   }

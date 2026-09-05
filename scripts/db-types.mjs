@@ -194,6 +194,13 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
     }
     lines.push('        };');
 
+    // `Relationships` is required by @supabase/postgrest-js's `GenericTable`
+    // (without it the schema fails the generic constraint and every typed
+    // query builder degrades to `never`). Embedded-resource joins are not
+    // used by this application (ADR-0004: explicit selects only), so an empty
+    // list is emitted rather than introspecting foreign-key metadata.
+    lines.push('        Relationships: [];');
+
     lines.push('      };');
   }
   lines.push('    };');

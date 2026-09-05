@@ -2,11 +2,13 @@ import 'server-only';
 
 import { z } from 'zod';
 
+import type { AuthContext } from '@/lib/auth/context';
 import type { HttpMethod } from '@/lib/types/http';
 import type { SuccessStatusCode } from '@/lib/types/api-envelope';
 import { toValidationIssues } from '@/lib/validation/format';
 import { REQUEST_ID_HEADER, resolveRequestId } from '@/lib/utils/request-id';
 import { ApiError, toApiError } from '@/server/api/errors';
+import { requireAuthContext } from '@/server/auth/context';
 import { createLogger, type Logger } from '@/server/logging/logger';
 
 /**
@@ -19,32 +21,25 @@ import { createLogger, type Logger } from '@/server/logging/logger';
  * cannot skip a step: the steps are not in their code.
  *
  * Enforced order, identical for every route:
- *   request id → method check → param/query/body validation → handler →
- *   envelope → response headers → structured log
+ *   request id → method check → param/query/body validation → AUTHENTICATION →
+ *   handler → envelope → response headers → structured log
  *
- * WHAT IS DELIBERATELY ABSENT IN PHASE 1
- * There is no authentication and no capability check here. Those are Phase 3 and
- * Phase 4, and inserting a placeholder now would create a control that looks
- * enforced but is not — the specific failure mode Rule 8 and Rule 14 forbid.
+ * AUTHENTICATION (Phase 3)
+ * Every route declares `auth: 'public' | 'required'` — a REQUIRED field, so a
+ * route that forgets its posture does not compile (the same structural
+ * enforcement `method` and `summary` already get, and the exact seam Phase 4
+ * uses for `capability`). `'required'` resolves `requireAuthContext()` after
+ * validation and before the handler: network-verified identity, database-
+ * resolved status and roles, the §8 status gate, and a memoised context the
+ * handler receives as a non-optional `auth` field. `'public'` skips resolution —
+ * the initial public set is the health probe and the auth endpoints
+ * (login/logout/session/password-recovery); everything under `/api/v1/**` else
+ * is denied by construction.
  *
- * No speculative hook is offered either. The seam Phase 3/4 will use is
- * *structural*, not a callback, and it already exists:
- *
- *   - every route in `app/api/**` is built with this function, asserted by block
- *     G of `tests/architecture/client-server-boundary.spec.ts`, so there is no
- *     route that could bypass a check added here;
- *   - the handler context exposes the `Request`, which is where the HttpOnly
- *     session cookie is read;
- *   - the pipeline already has a single place where cross-cutting work happens —
- *     parameter, query and body validation — and a capability check belongs
- *     immediately after it, before `handler` runs.
- *
- * Phase 3/4 therefore adds a **required** `capability` field to `RouteDefinition`
- * and enforces it at that point, extending the contract suite to assert every
- * route declares one. Requiring the field is what makes the control safe: a route
- * that forgets it fails to compile. An optional hook — the obvious alternative —
- * can be skipped silently, which is exactly the failure mode this file exists to
- * make impossible.
+ * WHAT IS DELIBERATELY ABSENT (Phase 4)
+ * No capability check yet — fine-grained authorization is Phase 4 by
+ * instruction, and the `capability` field will slot in beside `auth` with the
+ * same required-field enforcement.
  */
 
 /**
@@ -56,16 +51,32 @@ import { createLogger, type Logger } from '@/server/logging/logger';
  */
 export const MAX_JSON_BODY_BYTES = 1_048_576; // 1 MiB
 
-export interface RouteHandlerContext<TParams, TQuery, TBody> {
+/** The authentication posture every route must declare. */
+export type RouteAuth = 'public' | 'required';
+
+export interface RouteHandlerContext<TParams, TQuery, TBody, TAuth extends RouteAuth = RouteAuth> {
   readonly request: Request;
   readonly params: TParams;
   readonly query: TQuery;
   readonly body: TBody;
   readonly requestId: string;
   readonly log: Logger;
+  /**
+   * The resolved principal. Non-optional when the route declares
+   * `auth: 'required'`; `undefined` for public routes. Typing it conditionally
+   * (rather than `AuthContext | undefined` everywhere) means a protected
+   * handler simply reads `context.auth.userId` — no guard, no cast.
+   */
+  readonly auth: TAuth extends 'required' ? AuthContext : undefined;
 }
 
-export interface RouteDefinition<TParams, TQuery, TBody, TData> {
+export interface RouteDefinition<
+  TParams,
+  TQuery,
+  TBody,
+  TData,
+  TAuth extends RouteAuth = RouteAuth,
+> {
   /**
    * The one HTTP method this handler serves.
    *
@@ -91,12 +102,17 @@ export interface RouteDefinition<TParams, TQuery, TBody, TData> {
    * without cross-referencing source.
    */
   readonly summary: string;
+  /**
+   * Authentication posture — required, so the default for a new route is a
+   * COMPILE ERROR, not silent public access (design §5, §15).
+   */
+  readonly auth: TAuth;
   readonly paramSchema?: z.ZodType<TParams>;
   readonly querySchema?: z.ZodType<TQuery>;
   readonly bodySchema?: z.ZodType<TBody>;
   readonly successStatus?: SuccessStatusCode;
   readonly handler: (
-    context: RouteHandlerContext<TParams, TQuery, TBody>,
+    context: RouteHandlerContext<TParams, TQuery, TBody, TAuth>,
   ) => Promise<TData> | TData;
 }
 
@@ -107,9 +123,13 @@ export interface NextRouteContext {
 
 export type RouteHandler = (request: Request, context?: NextRouteContext) => Promise<Response>;
 
-export function withRoute<TParams = undefined, TQuery = undefined, TBody = undefined, TData = void>(
-  definition: RouteDefinition<TParams, TQuery, TBody, TData>,
-): RouteHandler {
+export function withRoute<
+  TParams = undefined,
+  TQuery = undefined,
+  TBody = undefined,
+  TData = void,
+  TAuth extends RouteAuth = RouteAuth,
+>(definition: RouteDefinition<TParams, TQuery, TBody, TData, TAuth>): RouteHandler {
   return async (request, context) => {
     const requestId = resolveRequestId(request.headers);
     const pathname = safePathname(request.url);
@@ -133,6 +153,16 @@ export function withRoute<TParams = undefined, TQuery = undefined, TBody = undef
       const query = readQuery(definition.querySchema, request) as TQuery;
       const body = (await readBody(definition.bodySchema, request)) as TBody;
 
+      // The authentication step (Phase 3). After validation (cheap, local, no
+      // side effects) and before the handler, so a rejected request costs one
+      // validation pass and no privileged work. `requireAuthContext()` performs
+      // network verification, the database round trip, the §8 status gate and
+      // the presence touch; its rejections surface as normal `ApiError`
+      // envelopes through the shared catch below.
+      const auth = (
+        definition.auth === 'required' ? await requireAuthContext() : undefined
+      ) as TAuth extends 'required' ? AuthContext : undefined;
+
       const data = await definition.handler({
         request,
         params,
@@ -140,6 +170,7 @@ export function withRoute<TParams = undefined, TQuery = undefined, TBody = undef
         body,
         requestId,
         log,
+        auth,
       });
 
       const status = definition.successStatus ?? 200;

@@ -75,10 +75,30 @@ function resolvesIntoServerRoot(importer: string, specifier: string): boolean {
 }
 
 describe('A. every server module declares the boundary', () => {
-  const modules = serverModules();
+  /**
+   * The ONE deliberate exemption: middleware-support modules compile for the
+   * Edge runtime, where the `server-only` package evaluates its throwing
+   * branch — importing it there breaks every page request at build time.
+   * `src/server/auth/session-refresh.ts` is imported by `middleware.ts` (repo
+   * root, Edge) and therefore must not carry the marker. What that module may
+   * import instead is pinned by `tests/architecture/auth-boundary.spec.ts`,
+   * which forbids it from reaching the service-role client or anything else
+   * that would smuggle server authority into the Edge bundle.
+   */
+  const SERVER_ONLY_EXEMPTIONS: readonly string[] = ['src/server/auth/session-refresh.ts'];
+
+  const modules = serverModules().filter((file) => !SERVER_ONLY_EXEMPTIONS.includes(file));
 
   it('found server modules to check', () => {
     expect(modules.length).toBeGreaterThan(0);
+  });
+
+  it('the server-only exemptions are exactly the documented set', () => {
+    // If a module stops needing the exemption, remove it here; if a new one
+    // must be added, the rationale belongs in this block's comment.
+    for (const exempt of SERVER_ONLY_EXEMPTIONS) {
+      expect(exempt.startsWith('src/server/')).toBe(true);
+    }
   });
 
   it.each(modules)('%s imports `server-only` as its first statement', (file) => {

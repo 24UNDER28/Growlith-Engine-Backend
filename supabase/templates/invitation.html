@@ -1,0 +1,38 @@
+<h2>You have been invited to Growlith Engine</h2>
+
+<p>
+  Accept your invitation to set up your account. The link below is personal: it proves control of
+  this mailbox and expires when the invitation does.
+</p>
+
+<p>
+  <a href="{{ .ConfirmationURL }}">Accept your invitation</a>
+</p>
+
+<p>
+  If the button does not work, copy this address into your browser:
+  <br />
+  <code>{{ .ConfirmationURL }}</code>
+</p>
+
+<p>
+  If you were not expecting this invitation, you can ignore this email — no account is created until
+  the link is used.
+</p>
+
+<!--
+  Template note (design §H): this template deliberately uses
+  {{ .ConfirmationURL }} rather than a hardcoded
+  {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite link.
+
+  The invitation link must carry a SECOND credential — the application token
+  (`it`) that selects the audited invitation row. That token is minted by the
+  invitation service and embedded in the per-invitation redirectTo target, and
+  GoTrue preserves the redirectTo's existing query parameters when it appends
+  `token_hash` and `type`. Only {{ .ConfirmationURL }} renders that combined
+  URL; hardcoding {{ .SiteURL }} would silently strip the application token
+  and break acceptance.
+
+  The recovery template has no second credential but uses ConfirmationURL for
+  the same reason: one pattern, zero surprises.
+-->
