@@ -30,12 +30,7 @@
 
 import type { AccountStatus } from '@/lib/auth/account-status';
 import type { InternalTeam } from '@/lib/domain/teams';
-import type {
-  OrganizationRole,
-  PlatformRole,
-  ProjectMemberRole,
-  Role,
-} from '@/lib/domain/roles';
+import type { OrganizationRole, PlatformRole, ProjectMemberRole, Role } from '@/lib/domain/roles';
 
 /* ────────────────────────────── the vocabulary ─────────────────────────── */
 
@@ -96,8 +91,8 @@ export type PermissionResource = (typeof PERMISSION_RESOURCES)[number];
 /** `{resource}:{action}` — a contract string (§1.3). */
 export type Capability = `${PermissionResource}:${PermissionAction}`;
 
-export const ALL_CAPABILITIES: readonly Capability[] = PERMISSION_RESOURCES.flatMap(
-  (resource) => PERMISSION_ACTIONS.map((action) => `${resource}:${action}` as Capability),
+export const ALL_CAPABILITIES: readonly Capability[] = PERMISSION_RESOURCES.flatMap((resource) =>
+  PERMISSION_ACTIONS.map((action) => `${resource}:${action}` as Capability),
 );
 
 export function isCapability(value: string): value is Capability {
@@ -144,12 +139,19 @@ export type PermissionQualifier = (typeof PERMISSION_QUALIFIERS)[number];
 export type PermissionGrant =
   | { readonly kind: 'DENY' }
   | { readonly kind: 'NA' }
-  | { readonly kind: 'ALLOW'; readonly scope: PermissionScope; readonly qualifiers: readonly PermissionQualifier[] };
+  | {
+      readonly kind: 'ALLOW';
+      readonly scope: PermissionScope;
+      readonly qualifiers: readonly PermissionQualifier[];
+    };
 
 const DENY: PermissionGrant = Object.freeze({ kind: 'DENY' });
 const NOT_APPLICABLE: PermissionGrant = Object.freeze({ kind: 'NA' });
 
-function allow(scope: PermissionScope, qualifiers: readonly PermissionQualifier[]): PermissionGrant {
+function allow(
+  scope: PermissionScope,
+  qualifiers: readonly PermissionQualifier[],
+): PermissionGrant {
   return Object.freeze({ kind: 'ALLOW', scope, qualifiers: Object.freeze([...qualifiers]) });
 }
 
@@ -588,12 +590,18 @@ function malformed(cell: string): never {
  * exception, not a default (§4: "dense, not sparse").
  */
 export const PERMISSION_MATRIX: Readonly<
-  Record<Role, Readonly<Record<PermissionResource, Readonly<Record<PermissionAction, PermissionGrant>>>>>
+  Record<
+    Role,
+    Readonly<Record<PermissionResource, Readonly<Record<PermissionAction, PermissionGrant>>>>
+  >
 > = buildMatrix();
 
 function buildMatrix() {
   const roleColumns: readonly Role[] = ['SUPER_ADMIN', 'ADMIN', 'CLIENT_ADMIN', 'CLIENT_MEMBER'];
-  type MutableMatrix = Record<Role, Record<PermissionResource, Record<PermissionAction, PermissionGrant>>>;
+  type MutableMatrix = Record<
+    Role,
+    Record<PermissionResource, Record<PermissionAction, PermissionGrant>>
+  >;
   const matrix: MutableMatrix = Object.fromEntries(
     roleColumns.map((role) => [
       role,
@@ -630,7 +638,10 @@ function buildMatrix() {
   }
 
   return Object.freeze(matrix) as Readonly<
-    Record<Role, Readonly<Record<PermissionResource, Readonly<Record<PermissionAction, PermissionGrant>>>>>
+    Record<
+      Role,
+      Readonly<Record<PermissionResource, Readonly<Record<PermissionAction, PermissionGrant>>>>
+    >
   >;
 }
 
