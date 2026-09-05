@@ -59,6 +59,7 @@ export interface AccountTransitionResult {
 }
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
+type PlatformGrantRow = Database['public']['Tables']['platform_role_grants']['Row'];
 
 /** GoTrue ban duration while an account is suspended or deactivated: 10 years.
  * Reinstatement/reactivation lifts it explicitly; the number is just "longer
@@ -108,6 +109,16 @@ async function transition(
   if (!policy.allowed) {
     throw ApiError.forbidden(
       `This account status change is not permitted: ${from} → ${to}. ${policy.reason ?? ''}`.trim(),
+    );
+  }
+
+  // `user:update` for ADMIN carries the [R] rule (§B.1): an ADMIN may change
+  // any account EXCEPT a SUPER_ADMIN's. The target's live grant is resolved
+  // from the database, never from the request, so a compromised ADMIN cannot
+  // suspend or offboard the very accounts that supervise it.
+  if (input.actor.platformRole === 'ADMIN' && target.holdsSuperAdmin) {
+    throw ApiError.forbidden(
+      'Only SUPER_ADMIN may change the status of a SUPER_ADMIN account.',
     );
   }
 
@@ -195,7 +206,9 @@ async function transition(
   };
 }
 
-type ProfileStatusRow = Pick<ProfileRow, 'id' | 'account_status' | 'deleted_at'>;
+type ProfileStatusRow = Pick<ProfileRow, 'id' | 'account_status' | 'deleted_at'> & {
+  readonly holdsSuperAdmin: boolean;
+};
 
 async function loadProfile(
   service: SupabaseServiceClient,
@@ -220,7 +233,27 @@ async function loadProfile(
     // unauditable "who suspended the suspender" row.
     throw ApiError.badRequest('Operators may not change their own account status.');
   }
-  return data;
+
+  // The target's live SUPER_ADMIN grant, for the ADMIN ceiling above. Resolved
+  // here (with the rest of the row) so the decision is one honest read rather
+  // than a check bolted on after the fact.
+  const { data: grants, error: grantsError } = await service
+    .from('platform_role_grants')
+    .select('role, expires_at')
+    .eq('user_id', targetUserId)
+    .is('revoked_at', null);
+
+  if (grantsError !== null) {
+    throw ApiError.serviceUnavailable('The account could not be loaded.');
+  }
+
+  const holdsSuperAdmin = (grants ?? []).some((grant) => {
+    const row = grant as Pick<PlatformGrantRow, 'role' | 'expires_at'>;
+    const live = row.expires_at === null || Date.parse(row.expires_at) > Date.now();
+    return row.role === 'SUPER_ADMIN' && live;
+  });
+
+  return { id: data.id, account_status: data.account_status, deleted_at: data.deleted_at, holdsSuperAdmin };
 }
 
 async function deactivateMemberships(

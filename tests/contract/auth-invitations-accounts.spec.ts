@@ -11,7 +11,7 @@ import {
   suspendAccount,
   type AccountTransitionInput,
 } from '@/server/auth/accounts';
-import { authContextFixture, UUIDS } from '../helpers/auth-fixtures';
+import { authContextFixture, clientContextFixture, UUIDS } from '../helpers/auth-fixtures';
 import { fakeQueryChain, fakeServiceClient } from '../helpers/fake-supabase';
 import type { Database } from '@/types/database';
 
@@ -220,6 +220,46 @@ describe('createInvitation — three states, three actions', () => {
     );
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'INVITE_SENT', severity: 'CRITICAL' }),
+    );
+  });
+
+  it('refuses a CLIENT_ADMIN from inviting a second CLIENT_ADMIN (ceiling 1, §A)', async () => {
+    const env = scriptService({ profilesRead: { data: null } });
+
+    const error = await rejectionOf(
+      createInvitation({
+        ...createInput,
+        auth: clientContextFixture(),
+        body: {
+          ...createInput.body,
+          organizationRole: 'CLIENT_ADMIN' as const,
+        },
+      }),
+    );
+
+    expect(error.status).toBe(403);
+    expect(error.message).toContain('CLIENT_MEMBER');
+    // The forbidden branch must short-circuit before any GoTrue invite.
+    expect(env.service.spies.inviteUserByEmail).not.toHaveBeenCalled();
+  });
+
+  it('allows a CLIENT_ADMIN to invite a CLIENT_MEMBER (the ceiling is one-directional)', async () => {
+    const env = scriptService({
+      profilesRead: { data: null },
+      tables: {
+        organizations: { data: { id: UUIDS.organization } },
+        invitations: { data: invitationRow() },
+      },
+    });
+
+    const dto = await createInvitation({
+      ...createInput,
+      auth: clientContextFixture(),
+    });
+
+    expect(dto.status).toBe('PENDING');
+    expect(env.spy('organization_memberships').passthrough).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'CLIENT_MEMBER', status: 'INVITED' }),
     );
   });
 
@@ -485,6 +525,43 @@ describe('the account-status service — transitions, evictions, audit', () => {
 
     const error = await rejectionOf(reactivateAccount(input(UUIDS.otherUser)));
     expect(error.status).toBe(403);
+  });
+
+  it('refuses an ADMIN from suspending a SUPER_ADMIN account (matrix [R] ceiling)', async () => {
+    scriptService({
+      profilesRead: {
+        data: { id: UUIDS.otherUser, account_status: 'ACTIVE', deleted_at: null },
+      },
+      tables: {
+        platform_role_grants: { data: [{ role: 'SUPER_ADMIN', expires_at: null }] },
+      },
+    });
+
+    const error = await rejectionOf(suspendAccount(input(UUIDS.otherUser)));
+    expect(error.status).toBe(403);
+    expect(error.message).toContain('SUPER_ADMIN');
+  });
+
+  it('allows SUPER_ADMIN to suspend another SUPER_ADMIN (the ceiling is ADMIN-only)', async () => {
+    const env = scriptService({
+      profilesRead: {
+        data: { id: UUIDS.otherUser, account_status: 'ACTIVE', deleted_at: null },
+      },
+      profilesWrite: { data: { id: UUIDS.otherUser, account_status: 'SUSPENDED' } },
+      tables: {
+        platform_role_grants: { data: [{ role: 'SUPER_ADMIN', expires_at: null }] },
+      },
+    });
+
+    const result = await suspendAccount({
+      ...input(UUIDS.otherUser),
+      actor: { userId: UUIDS.user, platformRole: 'SUPER_ADMIN' },
+    });
+
+    expect(result.accountStatus).toBe('SUSPENDED');
+    expect(env.spy('profiles:update').passthrough).toHaveBeenCalledWith(
+      expect.objectContaining({ account_status: 'SUSPENDED' }),
+    );
   });
 
   it('refuses self-service status changes — the suspender must stay auditable', async () => {

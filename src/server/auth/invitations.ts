@@ -89,6 +89,20 @@ export async function createInvitation(input: {
   const email = input.body.email.trim().toLowerCase();
   const isStaff = input.body.platformRole !== undefined;
 
+  // Ceiling 1, §A — the invitation path is the membership path's twin door, so
+  // it must carry the same lock: a CLIENT caller may only ever invite a
+  // CLIENT_MEMBER. Elevating a client into CLIENT_ADMIN requires an internal
+  // operator, exactly as in add_organization_member(); without this, the first
+  // compromised client admin could mint themselves a second admin and own the
+  // tenant permanently. The staff branch is unreachable for client callers
+  // anyway (the route's tenant resolver yields no tenant → 403), but the check
+  // guards the client branch regardless of how the service is reached.
+  if (input.auth.platformRole === null && input.body.organizationRole === 'CLIENT_ADMIN') {
+    throw ApiError.forbidden(
+      'A CLIENT_ADMIN may only invite CLIENT_MEMBER members; a CLIENT_ADMIN invitation requires an internal operator.',
+    );
+  }
+
   // Resolve the target (§2.1 step 2). Three states, three actions.
   const existing = await findLiveProfileByEmail(email);
 
