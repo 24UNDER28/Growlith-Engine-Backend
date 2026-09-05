@@ -175,7 +175,34 @@ therefore cannot be spoofed — by a caller.
 
 ---
 
-## 6. What Phase 2 must add
+## 6. What Phase 2 added
+
+**Status: implemented.** See [schema.md](schema.md) for the reference and
+`supabase/migrations/` for the definition. Everything listed below as "must add"
+now exists:
+
+- **Status values and their transitions** — `status_transitions` is a seeded
+  reference table (61 rows across engagement, service, project, deliverable and
+  task) enforced by `growlith.enforce_status_transition()`, so a direct
+  PostgREST write cannot bypass the state machine. `allowed_roles` is carried on
+  each row but is advisory until Phase 4 reads it.
+- **Field-level entity types** — `src/types/database.ts` is generated from the
+  live catalog and drift-checked in CI.
+- **Metrics** — `metrics` is a first-class time series keyed
+  `(organization_id, service_id, metric_key, metric_date)` with typed
+  `metric_key`, `metric_unit` and `metric_source` enums, plus `report_metrics`
+  as the frozen snapshot of figures as published.
+- **Internal-only fields** — `contract_value`, `monthly_retainer`,
+  `notes_internal`, `services.fee` and `fee_model` have table-wide `SELECT`
+  revoked from `authenticated` with visible columns re-granted individually, so a
+  column added later is invisible to clients by default.
+
+Two things Phase 2 deliberately did **not** do: application authentication
+(Phase 3) and the tenant RLS policy set (Phase 4). The predicates those policies
+will use exist and are tested; the policies themselves do not, because a partial
+policy set looks finished.
+
+## 6a. Original Phase 2 scope statement
 
 Not modelled in Phase 1, because doing so before the schema exists would guarantee
 drift (ADR-0004):
