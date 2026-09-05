@@ -12,34 +12,34 @@ actually built rather than what was predicted.
 
 🔒 = expensive or impossible to reverse later; decided in Phase 1 deliberately.
 
-| ADR     | Decision                                                                                                                    | Status       | Phase | File                                                                                    |
-| ------- | --------------------------------------------------------------------------------------------------------------------------- | ------------ | ----- | --------------------------------------------------------------------------------------- |
-| 0001 🔒 | One Next.js application holds both dashboards and the API                                                                   | **Accepted** | 1     | [ADR-0001](ADR-0001-single-nextjs-application.md)                                       |
-| 0002    | Client/server boundary is a filesystem wall enforced by four independent controls                                           | **Accepted** | 1     | [ADR-0002](ADR-0002-client-server-boundary-wall.md)                                     |
-| 0003    | App Router; RSC for reads, client components for interactivity                                                              | **Accepted** | 1     | _(recorded in `docs/architecture/README.md` §C; full ADR with Phase 9 UI)_              |
-| 0004    | No ORM. Hand-written forward-only SQL migrations + generated types                                                          | **Accepted** | 1     | [ADR-0004](ADR-0004-no-orm-generated-types.md)                                          |
-| 0005 🔒 | `organization_id` denormalized onto every tenant row, made tamper-proof by composite foreign keys                           | **Accepted** | 2     | [ADR-0005](ADR-0005-denormalized-tenant-key-composite-foreign-keys.md)                  |
-| 0006    | `service_lines` (catalogue) is separate from `services` (engagement instances), with a seeded 1:1 team mapping              | **Accepted** | 2     | [ADR-0006](ADR-0006-service-catalogue-separate-from-instances.md)                       |
-| 0007    | Two authorization layers — capability matrix (app) and RLS (database); both must pass                                       | Proposed     | 4     | _(authored in Phase 4)_                                                                 |
-| 0008    | RLS uses `SECURITY DEFINER` helpers with a pinned `search_path`, declared `STABLE`                                          | **Accepted** | 2     | [ADR-0008](ADR-0008-security-definer-rls-helpers.md)                                    |
-| 0009    | `ENABLE` **and** `FORCE ROW LEVEL SECURITY` on tenant tables                                                                | **Accepted** | 2     | [ADR-0009](ADR-0009-enable-and-force-row-level-security.md)                             |
-| 0010 ⚠️ | Roles are data, so a fifth internal role (`TEAM_MEMBER`) is a configuration change — **awaiting owner decision (risk R-1)** | Proposed     | 4     | _(authored in Phase 4)_                                                                 |
-| 0011    | Authorization data lives in PostgreSQL, not JWT claims; one non-authoritative `user_type` hint in `app_metadata`            | **Accepted** | 3     | [ADR-0011](ADR-0011-authorization-data-lives-in-postgres-not-jwt-claims.md)             |
-| 0012    | Sensitive client mutations go through `SECURITY DEFINER` RPCs, never direct `UPDATE`                                        | **Accepted** | 2     | [ADR-0012](ADR-0012-sensitive-mutations-through-definer-rpcs.md)                        |
-| 0013    | One mutation path: Route Handlers via `withRoute`; Server Actions may only delegate                                         | **Accepted** | 1     | [ADR-0013](ADR-0013-single-mutation-path.md)                                            |
-| 0014    | No CORS. The API is same-origin with the dashboards                                                                         | Proposed     | 5     | _(authored in Phase 5)_                                                                 |
-| 0015 🔒 | One private Storage bucket with an `organization_id`-first path convention                                                  | Proposed     | 6     | _(authored in Phase 6)_                                                                 |
-| 0016    | Signed upload/download URLs; file bytes never proxy through Next.js                                                         | Proposed     | 6     | _(authored in Phase 6)_                                                                 |
-| 0017    | Zod schemas shared by server and client; `.strict()`; types inferred, never duplicated                                      | **Accepted** | 1     | [ADR-0017](ADR-0017-shared-zod-validation.md)                                           |
-| 0018    | Cursor (keyset) pagination with server-clamped page sizes                                                                   | **Accepted** | 1     | _(implemented in `src/lib/pagination/`; rationale in `docs/architecture/README.md` §I)_ |
-| 0019    | Resources hidden by RLS return 404, never 403                                                                               | **Accepted** | 1     | _(implemented in `src/server/api/errors.ts`, tested)_                                   |
-| 0020    | Append-only `audit_events` with a database-level immutability trigger                                                       | **Accepted** | 2     | [ADR-0020](ADR-0020-append-only-audit-events.md)                                        |
-| 0021    | Executable verification is the proof of RLS; three layers, pgTAP still required in Phase 4                                  | **Accepted** | 2     | [ADR-0021](ADR-0021-pgtap-is-the-proof-of-rls.md)                                       |
-| 0022    | Dependency versions pinned on evidence, not on `latest`                                                                     | **Accepted** | 1     | [ADR-0022](ADR-0022-dependency-versions-pinned-on-evidence.md)                          |
-| 0023    | Environment config is lazy, fails fast at boot, and the logger never depends on it                                          | **Accepted** | 1     | [ADR-0023](ADR-0023-environment-lazy-fail-fast.md)                                      |
-| 0024    | Dependency-free structured logging with unconditional, two-mechanism redaction                                              | **Accepted** | 1     | [ADR-0024](ADR-0024-observability-foundation.md)                                        |
-| 0025    | One error envelope; `cause` is logged, never serialized; unknown throwables are downgraded                                  | **Accepted** | 1     | [ADR-0025](ADR-0025-error-envelope-and-non-disclosure.md)                               |
-| 0026    | Server-only session cookies; no browser Supabase client (resolves the placement question Phase 1 deferred)                  | **Accepted** | 3     | [ADR-0026](ADR-0026-server-only-session-cookies.md)                                     |
+| ADR     | Decision                                                                                                                                 | Status       | Phase | File                                                                                    |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ----- | --------------------------------------------------------------------------------------- |
+| 0001 🔒 | One Next.js application holds both dashboards and the API                                                                                | **Accepted** | 1     | [ADR-0001](ADR-0001-single-nextjs-application.md)                                       |
+| 0002    | Client/server boundary is a filesystem wall enforced by four independent controls                                                        | **Accepted** | 1     | [ADR-0002](ADR-0002-client-server-boundary-wall.md)                                     |
+| 0003    | App Router; RSC for reads, client components for interactivity                                                                           | **Accepted** | 1     | _(recorded in `docs/architecture/README.md` §C; full ADR with Phase 9 UI)_              |
+| 0004    | No ORM. Hand-written forward-only SQL migrations + generated types                                                                       | **Accepted** | 1     | [ADR-0004](ADR-0004-no-orm-generated-types.md)                                          |
+| 0005 🔒 | `organization_id` denormalized onto every tenant row, made tamper-proof by composite foreign keys                                        | **Accepted** | 2     | [ADR-0005](ADR-0005-denormalized-tenant-key-composite-foreign-keys.md)                  |
+| 0006    | `service_lines` (catalogue) is separate from `services` (engagement instances), with a seeded 1:1 team mapping                           | **Accepted** | 2     | [ADR-0006](ADR-0006-service-catalogue-separate-from-instances.md)                       |
+| 0007    | Two authorization layers that enforce **different** questions — capabilities (app) and row visibility (RLS); never the same rule twice   | **Accepted** | 4     | [ADR-0007](ADR-0007-two-authorization-layers.md)                                        |
+| 0008    | RLS uses `SECURITY DEFINER` helpers with a pinned `search_path`, declared `STABLE`                                                       | **Accepted** | 2     | [ADR-0008](ADR-0008-security-definer-rls-helpers.md)                                    |
+| 0009    | `ENABLE` **and** `FORCE ROW LEVEL SECURITY` on tenant tables                                                                             | **Accepted** | 2     | [ADR-0009](ADR-0009-enable-and-force-row-level-security.md)                             |
+| 0010 ⚠️ | The role model stays at **four** roles; risk R-1 accepted and **left open**. A fifth role (`TEAM_MEMBER`) remains a configuration change | **Accepted** | 4     | [ADR-0010](ADR-0010-four-roles-r1-accepted-and-open.md)                                 |
+| 0011    | Authorization data lives in PostgreSQL, not JWT claims; one non-authoritative `user_type` hint in `app_metadata`                         | **Accepted** | 3     | [ADR-0011](ADR-0011-authorization-data-lives-in-postgres-not-jwt-claims.md)             |
+| 0012    | Sensitive client mutations go through `SECURITY DEFINER` RPCs, never direct `UPDATE`                                                     | **Accepted** | 2     | [ADR-0012](ADR-0012-sensitive-mutations-through-definer-rpcs.md)                        |
+| 0013    | One mutation path: Route Handlers via `withRoute`; Server Actions may only delegate                                                      | **Accepted** | 1     | [ADR-0013](ADR-0013-single-mutation-path.md)                                            |
+| 0014    | No CORS. The API is same-origin with the dashboards                                                                                      | Proposed     | 5     | _(authored in Phase 5)_                                                                 |
+| 0015 🔒 | One private Storage bucket with an `organization_id`-first path convention                                                               | Proposed     | 6     | _(authored in Phase 6)_                                                                 |
+| 0016    | Signed upload/download URLs; file bytes never proxy through Next.js                                                                      | Proposed     | 6     | _(authored in Phase 6)_                                                                 |
+| 0017    | Zod schemas shared by server and client; `.strict()`; types inferred, never duplicated                                                   | **Accepted** | 1     | [ADR-0017](ADR-0017-shared-zod-validation.md)                                           |
+| 0018    | Cursor (keyset) pagination with server-clamped page sizes                                                                                | **Accepted** | 1     | _(implemented in `src/lib/pagination/`; rationale in `docs/architecture/README.md` §I)_ |
+| 0019    | Resources hidden by RLS return 404, never 403                                                                                            | **Accepted** | 1     | _(implemented in `src/server/api/errors.ts`, tested)_                                   |
+| 0020    | Append-only `audit_events` with a database-level immutability trigger                                                                    | **Accepted** | 2     | [ADR-0020](ADR-0020-append-only-audit-events.md)                                        |
+| 0021    | Executable verification is the proof of RLS; three layers, pgTAP still required in Phase 4                                               | **Accepted** | 2     | [ADR-0021](ADR-0021-pgtap-is-the-proof-of-rls.md)                                       |
+| 0022    | Dependency versions pinned on evidence, not on `latest`                                                                                  | **Accepted** | 1     | [ADR-0022](ADR-0022-dependency-versions-pinned-on-evidence.md)                          |
+| 0023    | Environment config is lazy, fails fast at boot, and the logger never depends on it                                                       | **Accepted** | 1     | [ADR-0023](ADR-0023-environment-lazy-fail-fast.md)                                      |
+| 0024    | Dependency-free structured logging with unconditional, two-mechanism redaction                                                           | **Accepted** | 1     | [ADR-0024](ADR-0024-observability-foundation.md)                                        |
+| 0025    | One error envelope; `cause` is logged, never serialized; unknown throwables are downgraded                                               | **Accepted** | 1     | [ADR-0025](ADR-0025-error-envelope-and-non-disclosure.md)                               |
+| 0026    | Server-only session cookies; no browser Supabase client (resolves the placement question Phase 1 deferred)                               | **Accepted** | 3     | [ADR-0026](ADR-0026-server-only-session-cookies.md)                                     |
 
 ## Decisions that were changed during implementation
 
@@ -65,6 +65,16 @@ evidence overrode intent:
   client-supplied `organization_id` that disagreed with the parent's. Changed
   during Phase 2 to raise instead: silent correction would have re-homed a
   misdirected write into another tenant and reported success.
+- **ADR-0007** — the register proposed two layers where "both must pass",
+  which reads as both enforcing the same rules. Phase 4's design rejects that:
+  two hand-maintained copies of one rule drift, and the drifted copy is the
+  permissive one. The layers now enforce **different questions** — capabilities
+  in the application, row visibility in the database — with exactly one shared
+  definition (`status_transitions.allowed_roles`, a single stored row both read).
+- **ADR-0010** — the register carried this as "awaiting owner decision". The
+  decision was taken in Phase 4: **four roles, R-1 accepted and left open.** The
+  proposal's premise (roles are data; a fifth role is configuration) is
+  confirmed and is now a design obligation with a costed change path.
 
 ## Decisions explicitly _not_ taken in Phase 1
 
