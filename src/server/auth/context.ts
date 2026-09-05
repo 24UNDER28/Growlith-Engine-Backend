@@ -97,7 +97,8 @@ const authContextSchema = z.object({
   // Phase 4 additions, delivered on the SAME round trip (§2). Unknown team
   // codes fail parsing rather than passing through: the array feeds UI chips
   // and the audit trail, and an unpinned string is how vocabularies rot.
-  teams: z.array(z.enum(INTERNAL_TEAMS as unknown as [string, ...string[]]))
+  teams: z
+    .array(z.enum(INTERNAL_TEAMS as unknown as [string, ...string[]]))
     .transform((teams) => teams as InternalTeam[])
     .default([]),
   projectRoles: z

@@ -95,8 +95,9 @@ const AUTH_RULE = /\bauth\s*:\s*'(public|required)'/;
 function tenantScopedSomewhere(capability: Capability): boolean {
   const [resource, action] = capability.split(':') as [PermissionResource, PermissionAction];
   return ROLES.some(
-    (role: Role) => PERMISSION_MATRIX[role][resource][action].kind === 'ALLOW'
-      && (PERMISSION_MATRIX[role][resource][action] as { scope?: string }).scope === 'TENANT',
+    (role: Role) =>
+      PERMISSION_MATRIX[role][resource][action].kind === 'ALLOW' &&
+      (PERMISSION_MATRIX[role][resource][action] as { scope?: string }).scope === 'TENANT',
   );
 }
 
@@ -105,9 +106,10 @@ describe('route authorization contract (Phase 4, static)', () => {
 
   it('every app/api route file is covered and every definition declares its posture', () => {
     for (const block of blocks) {
-      expect(AUTH_RULE.test(block.source), `${block.file} (${block.exported}): no auth posture`).toBe(
-        true,
-      );
+      expect(
+        AUTH_RULE.test(block.source),
+        `${block.file} (${block.exported}): no auth posture`,
+      ).toBe(true);
     }
     // The file list is non-empty and every file contributes at least one block.
     const files = new Set(blocks.map((block) => block.file));
@@ -126,7 +128,10 @@ describe('route authorization contract (Phase 4, static)', () => {
     for (const block of blocks) {
       if (AUTH_RULE.exec(block.source)?.[1] !== 'required') continue;
       const match = CAPABILITY_RULE.exec(block.source);
-      expect(match, `${block.file} (${block.exported}): protected without capability`).not.toBeNull();
+      expect(
+        match,
+        `${block.file} (${block.exported}): protected without capability`,
+      ).not.toBeNull();
       const capability = `${match![1]}:${match![2]}` as Capability;
       expect(
         ALL_CAPABILITIES.includes(capability),

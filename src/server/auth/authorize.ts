@@ -131,8 +131,14 @@ export async function authorize(
       const role = await fetchProjectRole(input.projectId);
       if (role !== 'LEAD') {
         return deny(
-          context, capability, 'PROJECT_MEMBERSHIP_REQUIRED', input.organizationId,
-          log, requestId, request, denialSubject,
+          context,
+          capability,
+          'PROJECT_MEMBERSHIP_REQUIRED',
+          input.organizationId,
+          log,
+          requestId,
+          request,
+          denialSubject,
         );
       }
     }
@@ -152,7 +158,16 @@ export async function authorize(
     // is the step-up the §8 matrix already defines for privileged surfaces.
     throw ApiError.mfaRequired();
   }
-  return deny(context, capability, reason, input.organizationId, log, requestId, request, denialSubject);
+  return deny(
+    context,
+    capability,
+    reason,
+    input.organizationId,
+    log,
+    requestId,
+    request,
+    denialSubject,
+  );
 }
 
 async function deny(
@@ -164,7 +179,10 @@ async function deny(
   requestId: string,
   request: Request | undefined,
   subject:
-    | { readonly entityKind?: EntityKind | undefined; readonly entityId?: string | null | undefined }
+    | {
+        readonly entityKind?: EntityKind | undefined;
+        readonly entityId?: string | null | undefined;
+      }
     | undefined,
 ): Promise<never> {
   const parsed = parseCapability(capability);
@@ -174,7 +192,9 @@ async function deny(
   // fabrication an audit trail must never contain.
   const hasTarget = typeof subject?.entityId === 'string' && subject.entityId.length > 0;
   const entityKind: EntityKind = hasTarget
-    ? (subject?.entityKind ?? (parsed ? RESOURCE_TO_AUDIT_ENTITY[parsed.resource] : undefined) ?? 'profile')
+    ? (subject?.entityKind ??
+      (parsed ? RESOURCE_TO_AUDIT_ENTITY[parsed.resource] : undefined) ??
+      'profile')
     : 'profile';
 
   // Best-effort by the audit module's contract: a failed audit write never
@@ -212,7 +232,9 @@ const projectRoleSchema = z
  * `project_role_in()` can see, and a bypass of that would turn the fallback
  * into a privilege.
  */
-async function fetchProjectRole(projectId: string): Promise<'LEAD' | 'CONTRIBUTOR' | 'REVIEWER' | 'OBSERVER' | null> {
+async function fetchProjectRole(
+  projectId: string,
+): Promise<'LEAD' | 'CONTRIBUTOR' | 'REVIEWER' | 'OBSERVER' | null> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc('project_role_in', { p_project_id: projectId });
   if (error !== null) {
@@ -268,15 +290,20 @@ export async function assertTransitionAllowed(
     throw ApiError.serviceUnavailable('The status catalogue could not be read.');
   }
   if (data === null) {
-    throw ApiError.conflict(`${entityKind}: ${fromStatus} → ${toStatus} is not a legal transition.`);
+    throw ApiError.conflict(
+      `${entityKind}: ${fromStatus} → ${toStatus} is not a legal transition.`,
+    );
   }
 
   const effective =
     context.platformRole ??
-    context.memberships.find((m) => m.organizationId === organizationId && m.status === 'ACTIVE')?.role ??
+    context.memberships.find((m) => m.organizationId === organizationId && m.status === 'ACTIVE')
+      ?.role ??
     null;
   const allowed = (data.allowed_roles ?? []) as readonly string[];
   if (effective === null || !allowed.includes(effective)) {
-    throw ApiError.forbidden(`This role may not move a ${entityKind} from ${fromStatus} to ${toStatus}.`);
+    throw ApiError.forbidden(
+      `This role may not move a ${entityKind} from ${fromStatus} to ${toStatus}.`,
+    );
   }
 }

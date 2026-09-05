@@ -595,9 +595,12 @@ describe('authorization step (Phase 4)', () => {
       },
     });
 
-    const response = await route(new Request('http://localhost/api/v1/invitations/x/revoke', { method: 'POST' }), {
-      params: Promise.resolve({ id: VALID_UUID }),
-    });
+    const response = await route(
+      new Request('http://localhost/api/v1/invitations/x/revoke', { method: 'POST' }),
+      {
+        params: Promise.resolve({ id: VALID_UUID }),
+      },
+    );
     expect(response.status).toBe(404);
     expect(handlerRan).toBe(false);
     expect(authorizeMock).not.toHaveBeenCalled();
@@ -692,13 +695,36 @@ describe('authorization step (Phase 4)', () => {
 
   it('enforces the capability contract at compile time', () => {
     // @ts-expect-error — Phase 4 contract: 'required' without a capability does not compile.
-    withRoute({ method: 'GET', auth: 'required', summary: 'unguarded', handler: async () => undefined });
-    // @ts-expect-error — a public route cannot carry a capability…
-    withRoute({ method: 'GET', auth: 'public', summary: 'open', capability: 'user:update', handler: async () => undefined });
-    // @ts-expect-error — …nor any authorization machinery at all.
-    withRoute({ method: 'GET', auth: 'public', summary: 'open', tenant: () => null, handler: async () => undefined });
-    // @ts-expect-error — a public route cannot demand an assurance floor it never reads.
-    withRoute({ method: 'GET', auth: 'public', summary: 'open', minAal: 2, handler: async () => undefined });
+    withRoute({
+      method: 'GET',
+      auth: 'required',
+      summary: 'unguarded',
+      handler: async () => undefined,
+    });
+    withRoute({
+      method: 'GET',
+      auth: 'public',
+      summary: 'open',
+      // @ts-expect-error — a public route cannot carry a capability…
+      capability: 'user:update',
+      handler: async () => undefined,
+    });
+    withRoute({
+      method: 'GET',
+      auth: 'public',
+      summary: 'open',
+      // @ts-expect-error — …nor any authorization machinery at all.
+      tenant: () => null,
+      handler: async () => undefined,
+    });
+    withRoute({
+      method: 'GET',
+      auth: 'public',
+      summary: 'open',
+      // @ts-expect-error — a public route cannot demand an assurance floor it never reads.
+      minAal: 2,
+      handler: async () => undefined,
+    });
     expect(true).toBe(true);
   });
 });

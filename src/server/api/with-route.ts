@@ -197,12 +197,13 @@ export type RouteDefinition<
   TBody = undefined,
   TData = void,
   TAuth extends RouteAuth = RouteAuth,
-> = RouteDefinitionCore<TParams, TQuery, TBody, TData, TAuth> & { readonly auth: TAuth } & (TAuth extends
-  'required'
-  ? RouteAuthorizationFields<TParams, TQuery, TBody> & { readonly capability: Capability }
-  : { readonly capability?: undefined } & Partial<
-      Record<'tenant' | 'project' | 'subjectUser' | 'minAal' | 'denialSubject', undefined>
-    >);
+> = RouteDefinitionCore<TParams, TQuery, TBody, TData, TAuth> & {
+  readonly auth: TAuth;
+} & (TAuth extends 'required'
+    ? RouteAuthorizationFields<TParams, TQuery, TBody> & { readonly capability: Capability }
+    : { readonly capability?: undefined } & Partial<
+        Record<'tenant' | 'project' | 'subjectUser' | 'minAal' | 'denialSubject', undefined>
+      >);
 
 /** The implementation-facing shape: every branch, all optional, one type. */
 type AnyRouteDefinition = RouteDefinitionCore<
@@ -219,11 +220,12 @@ type AnyRouteDefinition = RouteDefinitionCore<
 export function tenantFromField(
   source: 'params' | 'query',
   key: string,
-): <TParams, TQuery, TBody>(context: RouteAuthorizationContext<TParams, TQuery, TBody>) => string | null {
+): <TParams, TQuery, TBody>(
+  context: RouteAuthorizationContext<TParams, TQuery, TBody>,
+) => string | null {
   return (context) => {
     const container = (source === 'params' ? context.params : context.query) as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
     const value = container?.[key];
     return typeof value === 'string' && value.length > 0 ? value : null;
   };
@@ -320,7 +322,12 @@ export function withRoute<
         const guard = await authorize(
           auth as AuthContext,
           authz.capability,
-          { organizationId, projectId, subjectUserId, ...(authz.minAal === undefined ? {} : { requiredAal: authz.minAal }) },
+          {
+            organizationId,
+            projectId,
+            subjectUserId,
+            ...(authz.minAal === undefined ? {} : { requiredAal: authz.minAal }),
+          },
           log,
           requestId,
           request,
