@@ -18,7 +18,7 @@ The design rationale lives in the ADR register — [ADR-0005](adr/ADR-0005-denor
 
 |                                           | Count                                                             |
 | ----------------------------------------- | ----------------------------------------------------------------- |
-| Migrations                                | 24                                                                |
+| Migrations                                | 25                                                                |
 | Tables                                    | 23 (+1 partitioned parent, 14 partitions)                         |
 | Enum types                                | 36                                                                |
 | Foreign keys                              | 104, of which **21 are composite** `(parent_id, organization_id)` |
@@ -226,9 +226,9 @@ export DATABASE_URL='postgresql://…'   # any PostgreSQL 15+
 npm run db:check                       # reset · apply · seed · verify · type-drift
 ```
 
-- `npm test` — 42 schema tests, no database required (enum parity, RLS
+- `npm test` — 44 schema tests, no database required (enum parity, RLS
   declarations, composite FKs, pinned `search_path`, no destructive DDL).
-- `npm run db:verify` — 91 checks against a live database: structure **and**
+- `npm run db:verify` — 99 checks against a live database: structure **and**
   behaviour (cross-tenant writes rejected, illegal transitions refused,
   append-only tables immutable, audit rows correct).
 - **Still outstanding:** pgTAP under real JWTs. RLS is _authored, not executed_
