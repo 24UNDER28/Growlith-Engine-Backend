@@ -1,0 +1,83 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Growlith Engine — .gitignore
+#
+# ARCHITECTURAL NOTE (ADR-0001, risk B-1):
+# This file is intentionally the first file committed to the repository. The
+# single highest-consequence failure mode in a Supabase-backed application is a
+# `SUPABASE_SERVICE_ROLE_KEY` reaching git history: that role holds BYPASSRLS, so
+# one leaked key silently removes tenant isolation for every client organization.
+# Secrets in git history are effectively unrecoverable, so the ignore rules below
+# are treated as a security control, not as housekeeping.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Secrets & environment ────────────────────────────────────────────────────
+# Every dotenv file is ignored. `.env.example` is the ONLY tracked env file and
+# must contain placeholders exclusively (never a real value).
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+secrets.json
+**/service-account*.json
+
+# ── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+jspm_packages/
+
+# ── Next.js build output ─────────────────────────────────────────────────────
+.next/
+out/
+build/
+dist/
+next-env.d.ts
+.vercel/
+*.tsbuildinfo
+
+# ── Test & coverage output ───────────────────────────────────────────────────
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# ── Supabase local stack ─────────────────────────────────────────────────────
+# The local CLI stack writes a full database, auth and storage state here.
+# It is machine-local, large, and must never be committed.
+supabase/.temp/
+supabase/.branches/
+supabase/.dist/
+
+# ── Tooling caches ───────────────────────────────────────────────────────────
+.cache/
+.eslintcache
+.stylelintcache
+.turbo/
+.node_repl_history
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ── Editor / OS ──────────────────────────────────────────────────────────────
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Local data dumps (Rule 13: no production data in the repository) ─────────
+*.sql.gz
+*.dump
+*.csv
+!.github/**/*.csv
+tmp/
+scratch/

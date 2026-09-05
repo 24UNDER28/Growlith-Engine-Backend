@@ -1,0 +1,9 @@
+node_modules
+.next
+coverage
+dist
+build
+package-lock.json
+supabase/.temp
+types/database.ts
+next-env.d.ts

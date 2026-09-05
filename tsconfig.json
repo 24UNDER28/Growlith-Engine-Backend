@@ -1,0 +1,64 @@
+{
+  "compilerOptions": {
+    /* ── Runtime & modules ─────────────────────────────────────────────── */
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "ES2023"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "allowJs": false,
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "incremental": true,
+    /* ── Strictness (Rule 18) ──────────────────────────────────────────────
+       `strict` alone is not sufficient for a multi-tenant authorization
+       system, so the additional flags below are enabled deliberately:
+       - noUncheckedIndexedAccess: array/record indexing yields `T | undefined`,
+         which forces explicit handling of missing rows and cursor segments.
+       - exactOptionalPropertyTypes: prevents `{ x: undefined }` silently
+         satisfying `{ x?: T }`, which is how "field absent" and "field
+         explicitly cleared" get conflated in PATCH-style updates.
+       - verbatimModuleSyntax: makes type-only imports explicit, so the
+         client/server bundle split cannot accidentally pull a server type's
+         module into a client graph.                                     */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    /* ── Path aliases: the client/server wall is expressed here ────────────
+       `@/lib/*`     → isomorphic, provably secret-free.
+       `@/server/*`  → secret-bearing; importing it from a client graph is a
+                       build error (server-only) AND a lint error AND a test
+                       failure. See docs/architecture/README.md §M.
+       `@/components/*` → UI layer (Phase 9); may only depend on `@/lib/*`. */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@/components/*": ["./components/*"]
+    },
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": ["node_modules", ".next", "coverage", "dist", "build", "supabase/.temp"]
+}

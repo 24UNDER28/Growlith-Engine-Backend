@@ -1,0 +1,86 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Continuous integration.
+#
+# Phase 1 scope: the gates that exist today — typecheck, lint, test, build, and
+# the post-build client-exposure scan.
+#
+# A second job running the Supabase CLI under Docker (migrate → seed → pgTAP RLS
+# tests) is added in Phase 2, when there are migrations to run. It is not stubbed
+# here, because a job that cannot pass is not a gate (Rule 14). It matters
+# because RLS cannot be proven by unit tests: executing those policies in CI is
+# the only way tenant isolation is ever actually verified (risk R-3).
+#
+# No environment secrets are required. Configuration is parsed lazily and only at
+# first use (ADR-0023), so `next build` succeeds without them — which is what
+# keeps this workflow free of secret provisioning.
+# ─────────────────────────────────────────────────────────────────────────────
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Deterministic CI: no telemetry network calls during the build.
+  NEXT_TELEMETRY_DISABLED: 1
+
+jobs:
+  quality:
+    name: Typecheck, lint, test, build, exposure scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Kept in step with .nvmrc and the `engines` field in package.json.
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies (frozen lockfile)
+        # `npm ci` rather than `npm install`: CI must build exactly what was
+        # reviewed, never a freshly resolved dependency graph.
+        run: npm ci
+
+      - name: Verify formatting
+        run: npm run format:check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Must run after `build`: it inspects emitted client artifacts, not source.
+      - name: Scan client bundle for server-only material
+        run: npm run check:client-exposure
+
+      - name: Confirm the working tree is still clean
+        # Catches a build or generator that silently rewrites tracked files —
+        # e.g. tsconfig.json edits or a regenerated types/database.ts that was
+        # not committed (ADR-0004).
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Build modified tracked files. Commit the result or fix the generator."
+            git --no-pager diff --stat
+            exit 1
+          fi
