@@ -186,8 +186,18 @@ placement with it, choosing between:
 | A dedicated `src/client/` tier                                             | If more than one browser-only module appears (likely once Phase 9 lands) |
 | Colocated with its route group                                             | If only one feature area ever needs it                                   |
 
-No option is chosen now because the deciding fact — how many consumers, and
-where they live — does not exist yet.
+**Resolved in the Phase 3 design — none of the three.** The deciding fact
+arrived and it pointed the other way: any browser client stores session
+cookies JavaScript must be able to read, which breaks the "no token in JS"
+invariant above. [ADR-0026](adr/ADR-0026-server-only-session-cookies.md)
+records the decision: no browser Supabase client exists; session cookies are
+written only by `middleware.ts`, the `/api/v1/auth/**` handlers and the
+`/auth/confirm` callback, all server-side.
+
+The full Phase 3 authentication design — flows, session lifecycle, middleware
+strategy, account statuses, failure handling, implementation sequence — is
+[authentication.md](authentication.md), with [ADR-0011](adr/ADR-0011-authorization-data-lives-in-postgres-not-jwt-claims.md)
+settling the claims question (no authorization data in JWTs).
 
 ## F. Authorization boundary _(Phase 4 — designed, not implemented)_
 

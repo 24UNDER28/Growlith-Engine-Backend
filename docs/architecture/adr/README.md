@@ -24,7 +24,7 @@ actually built rather than what was predicted.
 | 0008    | RLS uses `SECURITY DEFINER` helpers with a pinned `search_path`, declared `STABLE`                                          | **Accepted** | 2     | [ADR-0008](ADR-0008-security-definer-rls-helpers.md)                                    |
 | 0009    | `ENABLE` **and** `FORCE ROW LEVEL SECURITY` on tenant tables                                                                | **Accepted** | 2     | [ADR-0009](ADR-0009-enable-and-force-row-level-security.md)                             |
 | 0010 ⚠️ | Roles are data, so a fifth internal role (`TEAM_MEMBER`) is a configuration change — **awaiting owner decision (risk R-1)** | Proposed     | 4     | _(authored in Phase 4)_                                                                 |
-| 0011    | Platform role travels in `app_metadata` and is re-verified against the database for privileged operations                   | Proposed     | 3     | _(authored in Phase 3)_                                                                 |
+| 0011    | Authorization data lives in PostgreSQL, not JWT claims; one non-authoritative `user_type` hint in `app_metadata`            | **Accepted** | 3     | [ADR-0011](ADR-0011-authorization-data-lives-in-postgres-not-jwt-claims.md)             |
 | 0012    | Sensitive client mutations go through `SECURITY DEFINER` RPCs, never direct `UPDATE`                                        | **Accepted** | 2     | [ADR-0012](ADR-0012-sensitive-mutations-through-definer-rpcs.md)                        |
 | 0013    | One mutation path: Route Handlers via `withRoute`; Server Actions may only delegate                                         | **Accepted** | 1     | [ADR-0013](ADR-0013-single-mutation-path.md)                                            |
 | 0014    | No CORS. The API is same-origin with the dashboards                                                                         | Proposed     | 5     | _(authored in Phase 5)_                                                                 |
@@ -39,6 +39,7 @@ actually built rather than what was predicted.
 | 0023    | Environment config is lazy, fails fast at boot, and the logger never depends on it                                          | **Accepted** | 1     | [ADR-0023](ADR-0023-environment-lazy-fail-fast.md)                                      |
 | 0024    | Dependency-free structured logging with unconditional, two-mechanism redaction                                              | **Accepted** | 1     | [ADR-0024](ADR-0024-observability-foundation.md)                                        |
 | 0025    | One error envelope; `cause` is logged, never serialized; unknown throwables are downgraded                                  | **Accepted** | 1     | [ADR-0025](ADR-0025-error-envelope-and-non-disclosure.md)                               |
+| 0026    | Server-only session cookies; no browser Supabase client (resolves the placement question Phase 1 deferred)                  | **Accepted** | 3     | [ADR-0026](ADR-0026-server-only-session-cookies.md)                                     |
 
 ## Decisions that were changed during implementation
 
