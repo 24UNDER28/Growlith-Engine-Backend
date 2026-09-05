@@ -46,6 +46,12 @@ export const AUTH_AUDIT_ACTIONS = [
   'ROLE_REVOKE',
   'STATUS_CHANGE',
   'UPDATE',
+  // Phase 4: capability-level denials are audited before the 403 goes out
+  // (§11 — "a denied request is still an event"). Tenant-reach denials are
+  // deliberately NOT audited: that would make the audit trail a per-tenant
+  // probe log, which is the very enumeration side-channel the 404 rule
+  // exists to close.
+  'PERMISSION_DENIED',
 ] as const;
 export type AuthAuditAction = (typeof AUTH_AUDIT_ACTIONS)[number];
 

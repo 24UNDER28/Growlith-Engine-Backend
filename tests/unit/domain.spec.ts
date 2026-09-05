@@ -11,6 +11,7 @@ import {
   ancestorChain,
   isEntityKind,
   parentOf,
+  REPORTING_ENTITIES,
 } from '@/lib/domain/entities';
 import {
   ORGANIZATION_ROLES,
@@ -304,6 +305,7 @@ describe('entity hierarchy — the containment model RLS is built on', () => {
       ...HIERARCHY_ENTITIES,
       ...SUPPORTING_ENTITIES,
       ...IDENTITY_ENTITIES,
+      ...REPORTING_ENTITIES,
     ]);
   });
 

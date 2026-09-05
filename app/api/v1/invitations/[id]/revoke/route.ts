@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { optionalTextField, uuidField } from '@/lib/validation/common';
 import { withRoute } from '@/server/api/with-route';
-import { revokeInvitation } from '@/server/auth/invitations';
+import { invitationOrganizationIdForGuard, revokeInvitation } from '@/server/auth/invitations';
 
 /**
  * POST /api/v1/invitations/{id}/revoke — revoke a pending invitation (§2.3).
@@ -18,6 +18,13 @@ export const dynamic = 'force-dynamic';
 const POST = withRoute({
   method: 'POST',
   auth: 'required',
+  // The row knows its tenant, not the caller (§I.3 step 4): the organization
+  // is read through the CALLER's RLS, invisibility is answered 404 log-only
+  // before any capability is named, and the audit subject degrades to "actor
+  // was denied" because `invitation` is not an `entity_kind` the audit enum
+  // knows — never to a fabricated reference.
+  capability: 'invitation:update',
+  tenant: ({ params }) => invitationOrganizationIdForGuard(params.id),
   summary: 'revoke a pending invitation',
   paramSchema: z.object({ id: uuidField('id') }).strict(),
   querySchema: z.object({ reason: optionalTextField('reason', 500).optional() }).strict(),

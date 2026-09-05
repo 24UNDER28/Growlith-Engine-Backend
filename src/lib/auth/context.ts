@@ -15,7 +15,8 @@
  */
 
 import type { AccountStatus, MembershipStatus } from '@/lib/auth/account-status';
-import type { OrganizationRole, PlatformRole } from '@/lib/domain/roles';
+import type { OrganizationRole, PlatformRole, ProjectMemberRole } from '@/lib/domain/roles';
+import type { InternalTeam } from '@/lib/domain/teams';
 
 /** One organization membership, as seen by the resolved principal. */
 export interface AuthContextMembership {
@@ -49,6 +50,28 @@ export interface AuthContext {
   readonly accountStatus: AccountStatus;
   readonly platformRole: PlatformRole | null;
   readonly memberships: readonly AuthContextMembership[];
+  /**
+   * Live staff-team memberships (`staff_team_memberships`). Resolved from the
+   * database in the same call as everything else; team scope is advisory for
+   * routing and never an authorization gate of its own (§1: the four roles are
+   * the authorization axes).
+   */
+  readonly teams: readonly InternalTeam[];
+  /**
+   * Live `project_memberships` as `projectId → project role` (§2). Consumed
+   * only where the capability matrix carries the `PROJECT_MEMBER` qualifier;
+   * authoritative enforcement of object-side membership is the service layer,
+   * the triggers and the definer RPCs — never a guess from this map (§D).
+   * Capped at 500 entries; see `projectRolesOverflow`.
+   */
+  readonly projectRoles: Readonly<Record<string, ProjectMemberRole>>;
+  /**
+   * True when the actor holds more than 500 live project memberships, so
+   * `projectRoles` is truncated. A caller must fall back to
+   * `project_role_in()` per project instead of treating absence as denial —
+   * or as permission. Truncation is flagged, never silently load-bearing.
+   */
+  readonly projectRolesOverflow: boolean;
   readonly aal: 'aal1' | 'aal2';
   readonly mfaEnrolled: boolean;
   /** RFC-invisible presence hint; null until the first throttled touch. */

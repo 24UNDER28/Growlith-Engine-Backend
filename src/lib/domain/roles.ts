@@ -102,3 +102,14 @@ export const ROLE_DEFINITIONS = {
   Role,
   { axis: 'platform' | 'organization'; tenantScoped: boolean; summary: string }
 >;
+
+/**
+ * Project membership roles — the delivery-team leg of §2.1's three-level
+ * resolution, and the only role axis that is NOT in the permission matrix: a
+ * project role never grants a capability, it satisfies an object-side
+ * qualifier (`[P]`) on a capability an organization role already granted.
+ * Mirrors the Postgres `project_member_role` enum (see the parity assertion
+ * in tests/unit/domain.spec.ts's sibling, the schema contract test).
+ */
+export const PROJECT_MEMBER_ROLES = ['LEAD', 'CONTRIBUTOR', 'REVIEWER', 'OBSERVER'] as const;
+export type ProjectMemberRole = (typeof PROJECT_MEMBER_ROLES)[number];

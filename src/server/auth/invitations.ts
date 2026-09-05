@@ -18,6 +18,7 @@ import { recordAuthEvent } from '@/server/auth/audit';
 //     role assignment must be an explicit audited SERVER decision, never a
 //     side effect of link-clicking (design §2.1 step 5).
 import { getSupabaseServiceClient } from '@/server/supabase/client-service';
+import { createSupabaseServerClient } from '@/server/supabase/client-server';
 import type { Database } from '@/types/database';
 
 /**
@@ -284,6 +285,31 @@ async function resendPendingInvitation(input: {
 }
 
 /* ─────────────────────────────── revoke ────────────────────────────────── */
+
+/**
+ * Phase 4 — the guard-side tenant resolver for by-id invitation routes
+ * (§I.3 step 4: the tenant comes from the row, not from the caller). Read
+ * through the CALLER's own client on purpose: the RLS policies define what
+ * this identity can see, so an invitation of another tenant reads exactly as
+ * a missing one, and the guard turns that into the shared 404. Never the
+ * service client here — a guard that sees more than the caller does is how
+ * existence leaks.
+ */
+export async function invitationOrganizationIdForGuard(id: string): Promise<string | null> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('invitations')
+    .select('organization_id')
+    .eq('id', id)
+    .maybeSingle();
+  if (error !== null) {
+    // Unreadable is not "not found": 503, so a database hiccup can never
+    // masquerade as an absent invitation.
+    throw ApiError.serviceUnavailable('The invitation could not be inspected.');
+  }
+  const raw = (data as { organization_id?: string | null } | null)?.organization_id;
+  return typeof raw === 'string' ? raw : null;
+}
 
 export async function revokeInvitation(input: {
   readonly id: string;

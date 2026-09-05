@@ -14,6 +14,10 @@ export const dynamic = 'force-dynamic';
 const POST = withRoute({
   method: 'POST',
   auth: 'required',
+  // `user:update` at the ◦ SELF cell — the subject is always the caller (no
+  // path-named person), so `subjectUser` is omitted and SELF is satisfied by
+  // construction; staff reach the same row through the ● cells.
+  capability: 'user:update',
   summary: 'remove a TOTP factor under a fresh aal2 session',
   bodySchema: mfaUnenrollBodySchema,
   successStatus: 204,

@@ -25,6 +25,9 @@ export function authContextFixture(overrides: Partial<AuthContext> = {}): AuthCo
     accountStatus: 'ACTIVE',
     platformRole: 'ADMIN',
     memberships: [],
+    teams: [],
+    projectRoles: {},
+    projectRolesOverflow: false,
     aal: 'aal1',
     mfaEnrolled: false,
     lastSeenAt: new Date().toISOString(),
@@ -64,6 +67,9 @@ export function authContextRpcPayload(
     mfaEnrolledAt: null,
     platformRole: 'ADMIN',
     memberships: [],
+    teams: [],
+    projectRoles: [],
+    projectRolesOverflow: false,
     ...overrides,
   };
 }

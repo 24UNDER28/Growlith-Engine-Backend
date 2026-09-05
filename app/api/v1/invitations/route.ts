@@ -15,6 +15,13 @@ export const dynamic = 'force-dynamic';
 const POST = withRoute({
   method: 'POST',
   auth: 'required',
+  // `invitation:create` is `● ● ◑ ✗`: GLOBAL for staff (the platform-role
+  // branch names no tenant — `undefined` below means "the request does not
+  // name one", which the GLOBAL cells answer and any TENANT cell cannot),
+  // TENANT for CLIENT_ADMIN, who must name a reachable organization in the
+  // body or be refused (§F.2).
+  capability: 'invitation:create',
+  tenant: ({ body }) => body.organizationId ?? undefined,
   summary: 'invite a person to the platform',
   bodySchema: createInvitationBodySchema,
   successStatus: 201,

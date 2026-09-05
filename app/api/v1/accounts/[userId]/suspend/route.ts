@@ -19,6 +19,14 @@ export const dynamic = 'force-dynamic';
 const POST = withRoute({
   method: 'POST',
   auth: 'required',
+  // `user:update` — the matrix row is `● ●[R] ◦ ◦`: GLOBAL for the platform
+  // roles (ADMIN's [R] rule against touching a SUPER_ADMIN's account is
+  // evaluated by the guard), SELF for client roles, so a CLIENT_ADMIN may run
+  // it on their own account and NOTHING on anyone else's (§I.3 step 6). The
+  // tenant resolver is legitimately absent: the winning cell is GLOBAL.
+  capability: 'user:update',
+  subjectUser: ({ params }) => params.userId,
+  denialSubject: { entityKind: 'profile', id: ({ params }) => params.userId },
   summary: 'suspend an account and revoke its sessions',
   paramSchema: z.object({ userId: uuidField('userId') }).strict(),
   bodySchema: z.object({ reason: textField('reason', 500) }).strict(),
