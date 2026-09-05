@@ -2,10 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { __resetClientEnvCacheForTests } from '@/lib/env/client-env';
 import { ApiError } from '@/server/api/errors';
-import {
-  requireAdminContext,
-  requirePortalContext,
-} from '@/server/auth/guards';
+import { requireAdminContext, requirePortalContext } from '@/server/auth/guards';
 import { authContextFixture, clientContextFixture, UUIDS } from '../helpers/auth-fixtures';
 
 /**
