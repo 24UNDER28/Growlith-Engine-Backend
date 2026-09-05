@@ -37,11 +37,13 @@ beforeEach(() => {
   __resetClientEnvCacheForTests();
 });
 
-function scriptClient(config: {
-  verifyOtpError?: unknown;
-  rpcData?: unknown;
-  rpcError?: unknown;
-} = {}) {
+function scriptClient(
+  config: {
+    verifyOtpError?: unknown;
+    rpcData?: unknown;
+    rpcError?: unknown;
+  } = {},
+) {
   const verifyOtp = vi.fn(async () => ({
     data: config.verifyOtpError ? null : { user: { id: 'u1' } },
     error: config.verifyOtpError ?? null,

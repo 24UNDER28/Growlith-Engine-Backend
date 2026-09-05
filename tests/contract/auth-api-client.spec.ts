@@ -71,9 +71,7 @@ describe('destinationForErrorBody — error-code → navigation mapping', () => 
       ErrorCode.ServiceUnavailable,
       ErrorCode.Internal,
     ] as const) {
-      expect(
-        destinationForErrorBody({ code, message: 'x' }, { currentPath: '/admin' }),
-      ).toBeNull();
+      expect(destinationForErrorBody({ code, message: 'x' }, { currentPath: '/admin' })).toBeNull();
     }
   });
 
