@@ -116,7 +116,8 @@ src/
 supabase/                 migrations, config, seed, pgTAP tests (Phase 2)
 tests/
   unit/  contract/  architecture/  helpers/  stubs/
-docs/architecture/        this document + ADRs + domain model
+docs/architecture/        this document + ADRs + domain model + phase designs
+                          (authentication.md, authorization.md, api.md)
 scripts/                  Node build/CI tooling
 ```
 
@@ -301,50 +302,47 @@ is a four-control problem (ADR-0002) rather than a code-review convention.
 
 `/api/v1/**` Route Handlers, Node.js runtime, `force-dynamic`. Implemented in
 Phase 1: `withRoute`, `ApiError`, the envelope types, error codes, cursor
-pagination, and the health probe.
+pagination, and the health probe. **Phase 5 designed the full surface** — 114
+endpoints across 20 resource families, with the response/error/validation,
+pagination, rate-limiting-hook, logging, audit and idempotency conventions
+and every endpoint's contract in [api.md](api.md) (designed, not yet
+implemented). When Phase 5 implementation completes, `/api/v1` becomes the
+compatibility contract (§A.2).
 
-| Aspect           | Decision                                                                                                                                                                                                         |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Style            | Resource-oriented REST, nesting capped at two levels; deeper access via query filters                                                                                                                            |
-| Versioning       | URL prefix. A breaking change creates `/v2`; `/v1` is never silently mutated                                                                                                                                     |
-| Wrapper          | `withRoute` — requestId → method → validation → _(Phase 4: capability)_ → handler → envelope → headers → log                                                                                                     |
-| Mutation path    | Route handlers only (ADR-0013)                                                                                                                                                                                   |
-| Validation       | Zod, `.strict()`, shared with client forms (ADR-0017)                                                                                                                                                            |
-| Pagination       | Keyset cursors, opaque and schema-validated on decode; `limit` clamped server-side (default 25, max 100)                                                                                                         |
-| Success envelope | `{ data, meta: { requestId, tookMs } }`; lists add `pagination: { limit, nextCursor, hasMore }`                                                                                                                  |
-| Error envelope   | `{ error: { code, message, details?, requestId? } }` — never a stack trace, SQL, row contents or upstream error text                                                                                             |
-| Status mapping   | 400 malformed · 401 unauthenticated · 403 forbidden · **404 for RLS-hidden** · 405 + `Allow` · 409 conflict · 413 too large · 422 validation · 423 suspended · 429 rate limited · 500 internal · 503 unavailable |
-| Body limit       | 1 MiB for JSON. Files never traverse the API — they use signed URLs (ADR-0016)                                                                                                                                   |
-| 405              | **Framework-generated — see the open item below**                                                                                                                                                                |
-| Caching          | `Cache-Control: no-store` set per response **and** at the edge in `next.config.ts`, so a handler that forgets still does not leak                                                                                |
-| CORS             | None. Same-origin only (ADR-0014)                                                                                                                                                                                |
-| No fake APIs     | Rule 14: `/api/v1/health` is operational infrastructure, not a stub. No other route exists until its migration, service and policies exist                                                                       |
+| Aspect           | Decision                                                                                                                                                                                                                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Style            | Resource-oriented REST, nesting capped at two levels; deeper access via query filters                                                                                                                                        |
+| Versioning       | URL prefix. A breaking change creates `/v2`; `/v1` is never silently mutated                                                                                                                                                 |
+| Wrapper          | `withRoute` — requestId → method → validation → _(Phase 4: capability)_ → handler → envelope → headers → log                                                                                                                 |
+| Mutation path    | Route handlers only (ADR-0013)                                                                                                                                                                                               |
+| Validation       | Zod, `.strict()`, shared with client forms (ADR-0017)                                                                                                                                                                        |
+| Pagination       | Keyset cursors, opaque and schema-validated on decode; `limit` clamped server-side (default 25, max 100)                                                                                                                     |
+| Success envelope | `{ data, meta: { requestId, tookMs } }`; lists add `pagination: { limit, nextCursor, hasMore }`                                                                                                                              |
+| Error envelope   | `{ error: { code, message, details?, requestId? } }` — never a stack trace, SQL, row contents or upstream error text                                                                                                         |
+| Status mapping   | 400 malformed · 401 unauthenticated · 403 forbidden · **404 for RLS-hidden** · 405 body-less (framework) · 409 conflict · 413 too large · 422 validation · 423 suspended · 429 rate limited · 500 internal · 503 unavailable |
+| Body limit       | 1 MiB for JSON. Files never traverse the API — they use signed URLs (ADR-0016)                                                                                                                                               |
+| 405              | **Framework-generated** — envelope waiver is contract ([ADR-0027](adr/ADR-0027-framework-generated-405.md)); clients tolerate a body-less 405                                                                                |
+| Caching          | `Cache-Control: no-store` set per response **and** at the edge in `next.config.ts`, so a handler that forgets still does not leak                                                                                            |
+| CORS             | None. Same-origin only (ADR-0014)                                                                                                                                                                                            |
+| No fake APIs     | Rule 14: `/api/v1/health` is operational infrastructure, not a stub. No other route exists until its migration, service and policies exist                                                                                   |
 
-### Open item discovered in Phase 1 — 405 responses are framework-generated
+### Resolved in Phase 5 — 405 responses stay framework-generated
 
-Verified against a running production build, not inferred: `POST` to
-`/api/v1/health` (which exports only `GET`) returns `405 Method Not Allowed` with
-an **empty body**, no `x-request-id`, and no `Allow` header. The request never
-reaches `withRoute` and never appears in the server log — Next.js rejects methods
-a route file does not export before invoking the handler.
+_Discovered and verified in Phase 1:_ `POST` to `/api/v1/health` (which
+exports only `GET`) returns `405 Method Not Allowed` with an **empty body**,
+no `x-request-id`, and no `Allow` header. The request never reaches
+`withRoute` and never appears in the server log — Next.js rejects methods a
+route file does not export before invoking the handler.
 
-Consequences:
-
-- The `{ error: { code, … } }` envelope does **not** hold for 405. Clients of
-  `/api/v1` must tolerate a body-less 405, so the typed API client (Phase 5)
-  treats an unparseable error body as a first-class case rather than an exception.
-- `withRoute`'s method check is _not_ the primary 405 mechanism. It catches a
-  **declaration/export mismatch** — `export { GET }` built from
-  `withRoute({ method: 'POST' })` — which would otherwise serve the wrong
-  semantics on the wrong verb. Its documentation and its contract test both say so
-  explicitly, because the alternative is a false belief that the application
-  controls every 405.
-
-Resolution is deferred to Phase 5, when routes exist to decide it against. The two
-viable options are (a) export every supported method per route file so the
-envelope is always ours, or (b) accept the framework behaviour and document it in
-the API contract. Option (a) is preferred if envelope uniformity proves worth the
-per-route boilerplate; deciding now, without real routes, would be guesswork.
+**The Phase 5 decision** ([ADR-0027](adr/ADR-0027-framework-generated-405.md)):
+option (b) — accept the framework behaviour and make the waiver contract.
+Routes export only the verbs they serve; clients of `/api/v1` must tolerate a
+body-less 405, and the typed client maps an unparseable error body to a
+first-class failure case. `withRoute`'s method check remains, re-scoped to
+what it actually catches: a declaration/export mismatch. Exporting every verb
+per route file for envelope uniformity was rejected — per-route boilerplate
+and review ceremony around a non-surface, for a case that is a caller bug,
+not a data-integrity event.
 
 ## I. Storage boundary _(Phase 6 — designed, not implemented)_
 
