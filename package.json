@@ -2,7 +2,7 @@
   "name": "growlith-engine-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Growlith Academy portal \u2014 admin and client dashboards plus the server-side API that backs them. Next.js, TypeScript, Supabase (PostgreSQL, Auth, Storage) with PostgreSQL RLS as the final authorization boundary.",
+  "description": "Growlith Academy portal — admin and client dashboards plus the server-side API that backs them. Next.js, TypeScript, Supabase (PostgreSQL, Auth, Storage) with PostgreSQL RLS as the final authorization boundary.",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=22.0.0",
@@ -20,6 +20,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "security:scan": "node scripts/secret-scan.mjs",
     "check:client-exposure": "node scripts/check-client-exposure.mjs",
     "db:types": "supabase gen types typescript --local --schema public > src/types/database.ts",
     "db:types:pg": "node scripts/db-types.mjs",
@@ -41,6 +42,7 @@
     "zod": "4.5.4"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.9",
     "@types/node": "22.19.1",
     "@types/pg": "8.23.1",
     "@types/react": "19.2.18",

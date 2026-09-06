@@ -17,8 +17,64 @@ type Row = Database['public']['Tables']['files']['Row'];
 
 const BUCKET = 'growlith-private';
 
+/**
+ * MIME allowlist (M-2 hardening). Covers product need: pdf/office/images/zip.
+ * SVG/HTML are deliberately excluded (inline script execution on storage origin).
+ */
+export const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.template',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'text/csv',
+  'text/plain',
+  'application/zip',
+  'application/x-zip-compressed',
+  'application/gzip',
+  'video/mp4',
+  'video/quicktime',
+]) as ReadonlySet<string>;
+
+function isAllowedMime(mime: string): boolean {
+  return ALLOWED_MIME_TYPES.has(mime.toLowerCase());
+}
+
 function sanitizeFileName(name: string): string {
   return name.replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 180);
+}
+
+const STORAGE_PATH_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/attachment\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[A-Za-z0-9._-]+$/;
+
+export function validateStoragePath(path: string, organizationId: string): void {
+  if (path.includes('..') || path.includes('\\')) {
+    throw ApiError.validation(
+      [{ path: 'storagePath', code: 'custom', message: 'storagePath must not contain path traversal sequences.' }],
+    );
+  }
+  if (!path.startsWith(`${organizationId}/`)) {
+    throw ApiError.validation(
+      [{ path: 'storagePath', code: 'custom', message: 'storagePath must begin with the organization id.' }],
+    );
+  }
+  if (!STORAGE_PATH_RE.test(path)) {
+    throw ApiError.validation(
+      [
+        {
+          path: 'storagePath',
+          code: 'custom',
+          message: 'storagePath must match {orgId}/attachment/{uuid}/{sanitized filename}.',
+        },
+      ],
+    );
+  }
 }
 
 export async function listFiles(input: {
@@ -96,8 +152,19 @@ export async function mintUploadUrl(input: FileParentInput & {
       { path: 'organizationId', code: 'required', message: 'A parent or organizationId is required.' },
     ]);
   }
+  // M-2: Enforce MIME allowlist at upload URL minting
+  if (!isAllowedMime(input.mimeType)) {
+    throw ApiError.validation(
+      [{ path: 'mimeType', code: 'custom', message: `MIME type ${input.mimeType} is not allowed.` }],
+      'The MIME type is not allowed.',
+    );
+  }
   const storagePath = `${organizationId}/attachment/${randomUUID()}/${sanitizeFileName(input.fileName)}`;
   const supabase = await createSupabaseServerClient();
+  // storage-js createSignedUploadUrl has no expiresIn param (only upsert); the
+  // server defaults to 3600s. Align declared expiry with actual to avoid spurious
+  // client re-mints and the longer-than-declared window described in L-1.
+  // If a shorter window is required, configure it at the storage bucket/infra layer.
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(storagePath);
   if (error !== null || data === null) {
     throw ApiError.serviceUnavailable('A signed upload URL could not be minted.');
@@ -106,7 +173,8 @@ export async function mintUploadUrl(input: FileParentInput & {
     storagePath,
     uploadUrl: data.signedUrl,
     token: data.token,
-    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    // Actual storage default is 3600s; declared must match to avoid drift (L-1).
+    expiresAt: new Date(Date.now() + 3600_000).toISOString(),
   };
 }
 
@@ -135,16 +203,72 @@ export async function registerFile(input: {
       { path: 'organizationId', code: 'required', message: 'A parent or organizationId is required.' },
     ]);
   }
-  if (!input.body.storagePath.startsWith(`${organizationId}/`)) {
+  // M-3: Strict path validation
+  validateStoragePath(input.body.storagePath, organizationId);
+  // M-2: MIME allowlist at registration (defense in depth)
+  if (!isAllowedMime(input.body.mimeType)) {
     throw ApiError.validation(
-      [
-        {
-          path: 'storagePath',
-          code: 'custom',
-          message: 'storagePath must begin with the organization id.',
-        },
-      ],
+      [{ path: 'mimeType', code: 'custom', message: `MIME type ${input.body.mimeType} is not allowed.` }],
+      'The MIME type is not allowed.',
     );
+  }
+  // M-3: Verify object exists via storage info, and validate size/mime against observed values
+  {
+    const supabase = await createSupabaseServerClient();
+    const { data: info, error: infoError } = await (supabase.storage.from(BUCKET) as unknown as {
+      info: (path: string) => Promise<{ data: { size: number; metadata?: { mimetype?: string }; contentType?: string } | null; error: { message: string } | null }>;
+      exists: (path: string) => Promise<{ data: boolean; error: unknown | null }>;
+    }).info(input.body.storagePath);
+    // Fallback to exists if info not available in this storage-js version
+    let exists = false;
+    let observedSize: number | null = null;
+    let observedMime: string | null = null;
+    if (infoError === null && info !== null) {
+      exists = true;
+      observedSize = (info as unknown as { size?: number }).size ?? null;
+      observedMime =
+        (info as unknown as { contentType?: string }).contentType ??
+        (info as unknown as { metadata?: { mimetype?: string } }).metadata?.mimetype ??
+        null;
+    } else {
+      const { data: existsData, error: existsError } = await (supabase.storage.from(BUCKET) as unknown as {
+        exists: (path: string) => Promise<{ data: boolean; error: unknown | null }>;
+      }).exists(input.body.storagePath);
+      if (existsError === null && existsData === true) {
+        exists = true;
+      }
+    }
+    if (!exists) {
+      throw ApiError.validation(
+        [{ path: 'storagePath', code: 'custom', message: 'The storage object does not exist.' }],
+        'The storage object could not be verified.',
+      );
+    }
+    // If we observed size/mime, validate against declared values (M-3 integrity)
+    if (observedSize !== null && observedSize !== input.body.sizeBytes) {
+      throw ApiError.validation(
+        [
+          {
+            path: 'sizeBytes',
+            code: 'custom',
+            message: `sizeBytes mismatch: declared ${input.body.sizeBytes} but object is ${observedSize}.`,
+          },
+        ],
+        'The file size does not match the stored object.',
+      );
+    }
+    if (observedMime !== null && observedMime.toLowerCase() !== input.body.mimeType.toLowerCase()) {
+      throw ApiError.validation(
+        [
+          {
+            path: 'mimeType',
+            code: 'custom',
+            message: `mimeType mismatch: declared ${input.body.mimeType} but object is ${observedMime}.`,
+          },
+        ],
+        'The MIME type does not match the stored object.',
+      );
+    }
   }
   const owners = [
     input.body.projectId,
@@ -270,7 +394,10 @@ export async function downloadFile(input: {
 }): Promise<{ readonly url: string; readonly expiresIn: number }> {
   const row = await loadLive<Row>('files', input.id);
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(row.storage_path, 60);
+  // M-2 hardening: force Content-Disposition: attachment to prevent inline execution
+  const { data, error } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrl(row.storage_path, 60, { download: row.file_name });
   if (error !== null || data === null) {
     throw ApiError.serviceUnavailable('A signed download URL could not be minted.');
   }

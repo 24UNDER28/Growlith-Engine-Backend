@@ -100,7 +100,9 @@ export async function downloadReportExport(input: {
   if (data === null) {
     throw ApiError.notFound();
   }
-  const signed = await supabase.storage.from(data.storage_bucket).createSignedUrl(data.storage_path, 60);
+  const signed = await supabase.storage
+    .from(data.storage_bucket)
+    .createSignedUrl(data.storage_path, 60, { download: `${report.title.replace(/[^A-Za-z0-9._-]+/g, '-')}.pdf` });
   if (signed.error !== null || signed.data === null) {
     throw ApiError.serviceUnavailable('A signed download URL could not be minted.');
   }

@@ -46,6 +46,16 @@ export const mfaVerifyBodySchema = z
 
 export type MfaVerifyBody = z.infer<typeof mfaVerifyBodySchema>;
 
+export const mfaEnrollBodySchema = z
+  .object({
+    // For INTERNAL accounts, fresh password re-auth is required before enrollment (H-1).
+    // CLIENT accounts may omit it.
+    password: z.string().min(1, 'password is required').optional(),
+  })
+  .strict();
+
+export type MfaEnrollBody = z.infer<typeof mfaEnrollBodySchema>;
+
 export const mfaUnenrollBodySchema = z
   .object({
     factorId: z.uuid({ message: 'factorId must be a valid UUID' }),
@@ -70,9 +80,56 @@ export async function enrollTotpFactor(input: {
   readonly auth: AuthContext;
   readonly request: Request;
   readonly requestId: string;
+  readonly body?: MfaEnrollBody | undefined;
 }): Promise<MfaEnrollment> {
   const log = createLogger({ scope: 'auth-mfa', requestId: input.requestId });
   const supabase = await createSupabaseServerClient();
+
+  // H-1 hardening: INTERNAL accounts must re-authenticate before enrollment.
+  // A stolen aal1 cookie alone must not escalate to aal2 via self-enrollment.
+  if (input.auth.userType === 'INTERNAL') {
+    // If already aal2, no need for password — second factor already proven.
+    // Otherwise require fresh password verification.
+    if (input.auth.aal !== 'aal2') {
+      const password = input.body?.password;
+      if (password === undefined || password.length === 0) {
+        // Audit the attempted enrollment without re-auth
+        await recordAuthEvent({
+          action: 'MFA_ENROLLED',
+          severity: 'WARNING',
+          entityId: input.auth.userId,
+          actorUserId: input.auth.userId,
+          requestId: input.requestId,
+          request: input.request,
+          reason: 'INTERNAL enrollment attempted without re-auth — denied',
+        });
+        log.warn('INTERNAL MFA enroll denied — re-auth required', { userId: input.auth.userId });
+        throw ApiError.mfaRequired(
+          'Password re-authentication is required to enroll a second factor.',
+        );
+      }
+      // Verify password via re-auth (C-1 audit: failed re-auth is logged)
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: input.auth.email,
+        password,
+      });
+      if (reauthError !== null) {
+        await recordAuthEvent({
+          action: 'LOGIN_FAILED',
+          severity: 'WARNING',
+          entityId: input.auth.userId,
+          actorUserId: input.auth.userId,
+          requestId: input.requestId,
+          request: input.request,
+          after: { reason: 'mfa_enroll_reauth_failed' },
+          reason: 'MFA enroll re-auth failed',
+        });
+        log.warn('INTERNAL MFA enroll re-auth failed', { userId: input.auth.userId });
+        throw ApiError.invalidCredentials('Re-authentication failed.');
+      }
+      log.info('INTERNAL MFA enroll re-auth succeeded', { userId: input.auth.userId });
+    }
+  }
 
   const { data, error } = await supabase.auth.mfa.enroll({
     factorType: 'totp',
@@ -80,7 +137,7 @@ export async function enrollTotpFactor(input: {
   });
 
   if (error !== null || data === null) {
-    throw mapMfaError(error, 'enroll');
+    throw mapMfaError(error, 'enroll', log, input.auth, input.request, input.requestId);
   }
 
   if (data.totp === undefined) {
@@ -89,6 +146,26 @@ export async function enrollTotpFactor(input: {
   }
 
   log.info('TOTP factor enrolled (unverified)', { userId: input.auth.userId });
+
+  // H-1: Notify owner of enrollment (audit + security log for staff factor changes)
+  await recordAuthEvent({
+    action: 'MFA_ENROLLED',
+    severity: 'NOTICE',
+    entityId: input.auth.userId,
+    actorUserId: input.auth.userId,
+    requestId: input.requestId,
+    request: input.request,
+    after: { factorId: data.id, step: 'enroll' },
+    reason: 'TOTP factor enrollment initiated — verify to complete',
+  });
+  if (input.auth.userType === 'INTERNAL') {
+    log.warn('INTERNAL MFA factor enrollment initiated', {
+      userId: input.auth.userId,
+      factorId: data.id,
+    });
+    // In production, send email notification with revocation link here.
+    // For now, audit + warn covers detection; email wiring is infra concern.
+  }
 
   return {
     factorId: data.id,
@@ -122,7 +199,8 @@ export async function challengeAndVerifyTotp(input: {
   });
 
   if (challengeError !== null || challenge === null) {
-    throw mapMfaError(challengeError, 'challenge');
+    await auditMfaFailure(input.auth, input.request, input.requestId, 'challenge', challengeError, log);
+    throw mapMfaError(challengeError, 'challenge', log, input.auth, input.request, input.requestId);
   }
 
   const { data: verification, error: verifyError } = await supabase.auth.mfa.verify({
@@ -133,8 +211,9 @@ export async function challengeAndVerifyTotp(input: {
 
   if (verifyError !== null || verification === null) {
     // GoTrue enforces per-factor attempt limits; repeated failures are the
-    // same envelope, and the client may retry (§12).
-    throw mapMfaError(verifyError, 'verify');
+    // same envelope, and the client may retry (§12). Audit every failure (C-1).
+    await auditMfaFailure(input.auth, input.request, input.requestId, 'verify', verifyError, log);
+    throw mapMfaError(verifyError, 'verify', log, input.auth, input.request, input.requestId);
   }
 
   // The verified session's NEW assurance level — read after the promotion,
@@ -143,7 +222,7 @@ export async function challengeAndVerifyTotp(input: {
     await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
 
   if (aalError !== null) {
-    throw mapMfaError(aalError, 'verify');
+    throw mapMfaError(aalError, 'verify', log, input.auth, input.request, input.requestId);
   }
   const aal: 'aal1' | 'aal2' = aalData?.currentLevel === 'aal2' ? 'aal2' : 'aal1';
 
@@ -185,7 +264,7 @@ export async function listTotpFactors(): Promise<MfaFactorSummary[]> {
   const { data, error } = await supabase.auth.mfa.listFactors();
 
   if (error !== null || data === null) {
-    throw mapMfaError(error, 'listFactors');
+    throw mapMfaError(error, 'listFactors', createLogger({ scope: 'auth-mfa' }), null as unknown as AuthContext, undefined as unknown as Request, 'unknown');
   }
 
   return data.totp.map((factor) => ({
@@ -216,7 +295,7 @@ export async function unenrollTotpFactor(input: {
   const { error } = await supabase.auth.mfa.unenroll({ factorId: input.body.factorId });
 
   if (error !== null) {
-    throw mapMfaError(error, 'unenroll');
+    throw mapMfaError(error, 'unenroll', log, input.auth, input.request, input.requestId);
   }
 
   await recordAuthEvent({
@@ -254,9 +333,38 @@ async function stampEnrollmentMirror(userId: string, log: Logger): Promise<void>
   }
 }
 
+async function auditMfaFailure(
+  auth: AuthContext,
+  request: Request,
+  requestId: string,
+  step: string,
+  error: { readonly message: string } | null,
+  log: Logger,
+): Promise<void> {
+  log.warn('MFA verification failed', {
+    userId: auth.userId,
+    step,
+    reason: error?.message ?? 'unknown',
+  });
+  await recordAuthEvent({
+    action: 'LOGIN_FAILED',
+    severity: 'WARNING',
+    entityId: auth.userId,
+    actorUserId: auth.userId,
+    requestId,
+    request,
+    after: { reason: 'mfa_failed', step },
+    reason: `MFA ${step} failed`,
+  });
+}
+
 function mapMfaError(
   error: { readonly message: string; readonly status?: number | undefined } | null,
   step: string,
+  _log?: Logger,
+  _auth?: AuthContext,
+  _request?: Request,
+  _requestId?: string,
 ): ApiError {
   if (error === null) {
     return ApiError.internal(new Error(`mfa.${step} returned no data`));
@@ -266,5 +374,6 @@ function mapMfaError(
   }
   // GoTrue's factor errors (unknown factor, wrong code, expired challenge,
   // attempt limits) all map to the credentials family: retryable, uniform.
+  // Audit already performed by caller (auditMfaFailure) before throwing.
   return ApiError.invalidCredentials(`The verification code could not be accepted (${step}).`);
 }

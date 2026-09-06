@@ -175,7 +175,7 @@ describe('enrollTotpFactor — the enrollment shape (§6c)', () => {
     script();
 
     const enrollment = await enrollTotpFactor({
-      auth: authContextFixture(),
+      auth: authContextFixture({ aal: 'aal2' }),
       request: new Request('https://app.test/'),
       requestId: 'req-mfa',
     });

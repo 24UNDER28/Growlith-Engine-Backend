@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ErrorCode } from '@/lib/types/error-codes';
 import { REQUEST_ID_HEADER } from '@/lib/utils/request-id';
@@ -62,6 +62,11 @@ afterAll(() => {
   } else {
     process.env.LOG_LEVEL = originalLogLevel;
   }
+});
+
+beforeEach(() => {
+  requireAuthContextMock.mockReset();
+  authorizeMock.mockReset();
 });
 
 function jsonRequest(
@@ -580,7 +585,7 @@ describe('authorization step (Phase 4)', () => {
   });
 
   it('answers 404 (log-only, before the guard) when a row-based tenant resolver finds nothing', async () => {
-    requireAuthContextMock.mockResolvedValueOnce(authContextFixture());
+    requireAuthContextMock.mockResolvedValueOnce(authContextFixture({ aal: 'aal2' }));
 
     let handlerRan = false;
     const route = withRoute({
@@ -607,7 +612,7 @@ describe('authorization step (Phase 4)', () => {
   });
 
   it('an `undefined` tenant (no tenant named) still consults the guard with organizationId null', async () => {
-    requireAuthContextMock.mockResolvedValueOnce(authContextFixture());
+    requireAuthContextMock.mockResolvedValueOnce(authContextFixture({ aal: 'aal2' }));
     authorizeMock.mockResolvedValueOnce({ allowed: true, obligations: [] });
 
     const route = withRoute({
@@ -626,7 +631,7 @@ describe('authorization step (Phase 4)', () => {
   });
 
   it('passes minAal through to both the authority and the guard', async () => {
-    requireAuthContextMock.mockResolvedValueOnce(authContextFixture());
+    requireAuthContextMock.mockResolvedValueOnce(authContextFixture({ aal: 'aal2' }));
     authorizeMock.mockResolvedValueOnce({ allowed: true, obligations: [] });
 
     const route = withRoute({

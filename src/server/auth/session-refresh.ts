@@ -86,6 +86,16 @@ export interface RefreshedSession {
   readonly applyCookies: (response: CookieSink) => void;
 }
 
+/**
+ * Pinned session cookie attributes (L-3 hardening) — must match client-server.ts.
+ */
+export const PINNED_COOKIE_OPTIONS = {
+  path: '/',
+  sameSite: 'lax' as const,
+  httpOnly: true,
+  secure: true,
+} as const;
+
 export async function refreshSession(request: {
   readonly cookies: { readonly getAll: () => { name: string; value: string }[] };
 }): Promise<RefreshedSession> {
@@ -107,6 +117,7 @@ export async function refreshSession(request: {
   }[] = [];
 
   const supabase = createServerClient(url, anonKey, {
+    cookieOptions: PINNED_COOKIE_OPTIONS,
     cookies: {
       getAll() {
         return request.cookies.getAll();

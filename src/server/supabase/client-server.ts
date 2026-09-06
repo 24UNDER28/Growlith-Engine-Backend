@@ -37,6 +37,17 @@ import type { Database } from '@/types/database';
 
 export type SupabaseServerClient = SupabaseClient<Database>;
 
+/**
+ * Pinned session cookie attributes (L-3 hardening).
+ * Explicit so a dependency upgrade cannot silently change SameSite/Secure/HttpOnly.
+ */
+export const PINNED_COOKIE_OPTIONS = {
+  path: '/',
+  sameSite: 'lax' as const,
+  httpOnly: true,
+  secure: true,
+} as const;
+
 export async function createSupabaseServerClient(): Promise<SupabaseServerClient> {
   const cookieStore = await cookies();
   // Both values come from the public contract, which server modules are allowed
@@ -45,6 +56,7 @@ export async function createSupabaseServerClient(): Promise<SupabaseServerClient
   const { NEXT_PUBLIC_SUPABASE_URL: url, NEXT_PUBLIC_SUPABASE_ANON_KEY: anonKey } = getClientEnv();
 
   return createServerClient<Database>(url, anonKey, {
+    cookieOptions: PINNED_COOKIE_OPTIONS,
     cookies: {
       getAll() {
         return cookieStore.getAll();

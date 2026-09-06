@@ -6,8 +6,8 @@ import { idParamSchema } from '@/lib/validation/resources';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const GET = withRoute({
-  method: 'GET',
+const POST = withRoute({
+  method: 'POST',
   auth: 'required',
   capability: 'report:download',
   tenant: tenantFromRow('reports', 'id'),
@@ -18,4 +18,4 @@ const GET = withRoute({
     downloadReportExport({ id: params.id, auth, request, requestId }),
 });
 
-export { GET };
+export { POST };

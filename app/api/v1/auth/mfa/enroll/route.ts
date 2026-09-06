@@ -1,5 +1,5 @@
 import { withRoute } from '@/server/api/with-route';
-import { enrollTotpFactor } from '@/server/auth/routes-mfa';
+import { enrollTotpFactor, mfaEnrollBodySchema } from '@/server/auth/routes-mfa';
 
 /**
  * POST /api/v1/auth/mfa/enroll — begin TOTP enrollment (§6c).
@@ -20,7 +20,9 @@ const POST = withRoute({
   capability: 'user:update',
   rateLimit: { class: 'sensitive' },
   summary: 'begin TOTP enrollment for the signed-in account',
-  handler: async ({ auth, request, requestId }) => enrollTotpFactor({ auth, request, requestId }),
+  bodySchema: mfaEnrollBodySchema,
+  handler: async ({ auth, request, requestId, body }) =>
+    enrollTotpFactor({ auth, request, requestId, body }),
 });
 
 export { POST };
