@@ -115,17 +115,17 @@ Roles: `SUPER_ADMIN` and `ADMIN` (internal, global), `CLIENT_ADMIN` and
 
 ## Phase roadmap
 
-| Phase | Scope                                                    | Status                                                                                           |
-| ----- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| 1     | Architecture                                             | ✅ **Complete and validated**                                                                    |
-| 2     | Database — schema, migrations, RLS, pgTAP                | ✅ **Complete** (pgTAP outstanding — risk R-3)                                                   |
+| Phase | Scope                                                    | Status                                                                        |
+| ----- | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| 1     | Architecture                                             | ✅ **Complete and validated**                                                 |
+| 2     | Database — schema, migrations, RLS, pgTAP                | ✅ **Complete** (pgTAP outstanding — risk R-3)                                |
 | 3     | Authentication — sessions, invites, MFA, middleware      | ✅ **Implemented** ([authentication.md](docs/architecture/authentication.md)) |
-| 4     | Authorization — capability matrix, guards, RLS hardening | ✅ **Implemented** ([authorization.md](docs/architecture/authorization.md)) |
-| 5     | APIs — resources, services, repositories                 | ✅ **Implemented** ([api.md](docs/architecture/api.md)) |
-| 6     | Security — headers, rate limiting, storage, audit        | Not started                                                                                      |
-| 7     | Seed data                                                | Not started                                                                                      |
-| 8     | Testing — L4 RLS integration, L5 E2E                     | Not started                                                                                      |
-| 9     | Dashboard UI — admin and client                          | Not started                                                                                      |
+| 4     | Authorization — capability matrix, guards, RLS hardening | ✅ **Implemented** ([authorization.md](docs/architecture/authorization.md))   |
+| 5     | APIs — resources, services, repositories                 | ✅ **Implemented** ([api.md](docs/architecture/api.md))                       |
+| 6     | Security — headers, rate limiting, storage, audit        | Not started                                                                   |
+| 7     | Seed data                                                | Not started                                                                   |
+| 8     | Testing — L4 RLS integration, L5 E2E                     | Not started                                                                   |
+| 9     | Dashboard UI — admin and client                          | Not started                                                                   |
 
 Each phase must leave the repository buildable, and does not begin until the
 previous one is validated.

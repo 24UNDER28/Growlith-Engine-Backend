@@ -26,7 +26,10 @@ export async function loadLive<T>(
   options: { readonly live?: boolean | undefined } = {},
 ): Promise<T> {
   const supabase = await createSupabaseServerClient();
-  let query = supabase.from(table as never).select('*').eq('id', id);
+  let query = supabase
+    .from(table as never)
+    .select('*')
+    .eq('id', id);
   if (options.live !== false) {
     query = query.is('deleted_at', null);
   }
@@ -151,7 +154,10 @@ export function sqlSortColumn(sort: string): string {
  * with `nullsFirst: false` can then continue through the null tail with an
  * `is null` bound (see listLive).
  */
-function rowKeyValue<T extends { readonly id: string }>(row: T, column: string): string | number | null {
+function rowKeyValue<T extends { readonly id: string }>(
+  row: T,
+  column: string,
+): string | number | null {
   const value = (row as unknown as Record<string, unknown>)[column];
   if (typeof value === 'string' || typeof value === 'number') {
     return value;
@@ -220,9 +226,7 @@ export async function listLive<T extends { readonly id: string }>(input: {
       // direction, so the bound is (col IS NULL AND id <|> cursor.id).
       q = q.or(`and(${column}.is.null,id.${idOp}.${page.cursor.id})`);
     } else {
-      q = q.or(
-        `${column}.${boundOp}.${key},and(${column}.eq.${key},id.${idOp}.${page.cursor.id})`,
-      );
+      q = q.or(`${column}.${boundOp}.${key},and(${column}.eq.${key},id.${idOp}.${page.cursor.id})`);
     }
   }
   // `nullsFirst: false` keeps NULL sort values at the end of a page in both

@@ -34,8 +34,6 @@ vi.mock('@/server/db/rpc', () => rpcMock);
 // Static imports execute after the mocks are installed (vi.mock hoists).
 import { patchMember, removeMember } from '@/server/services/memberships';
 
-
-
 const MEMBERSHIP_ROW = {
   id: 'm-9',
   organization_id: 'org-9', // different org from the one named in the path
@@ -92,7 +90,10 @@ describe('organization membership object-scope enforcement', () => {
       }),
     ).resolves.toMatchObject({ role: 'CLIENT_MEMBER' });
 
-    expect(rpcMock.callRpcVoid).toHaveBeenCalledWith('update_organization_member', expect.anything());
+    expect(rpcMock.callRpcVoid).toHaveBeenCalledWith(
+      'update_organization_member',
+      expect.anything(),
+    );
     expect(rpcMock.callRpcVoid).toHaveBeenCalledTimes(1);
   });
 
@@ -107,7 +108,10 @@ describe('organization membership object-scope enforcement', () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(rpcMock.callRpcVoid).toHaveBeenCalledWith('remove_organization_member', expect.anything());
+    expect(rpcMock.callRpcVoid).toHaveBeenCalledWith(
+      'remove_organization_member',
+      expect.anything(),
+    );
     expect(rpcMock.callRpcVoid).toHaveBeenCalledTimes(1);
   });
 

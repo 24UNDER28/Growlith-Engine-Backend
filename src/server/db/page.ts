@@ -46,8 +46,7 @@ export function slicePage<T extends { readonly id: string }>(
       limit: page.limit,
       hasMore,
       sort: page.sort,
-      next:
-        hasMore && last !== undefined ? { key: keyOf(last), id: last.id } : null,
+      next: hasMore && last !== undefined ? { key: keyOf(last), id: last.id } : null,
     }),
   };
 }

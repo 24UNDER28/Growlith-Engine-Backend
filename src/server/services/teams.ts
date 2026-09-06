@@ -24,7 +24,10 @@ export async function listTeams(): Promise<
   }[]
 > {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.from('teams').select('code, label, is_active').order('sort_order');
+  const { data, error } = await supabase
+    .from('teams')
+    .select('code, label, is_active')
+    .order('sort_order');
   throwIfError(error, 'read');
   const { data: members, error: memberError } = await supabase
     .from('staff_team_memberships')
@@ -51,7 +54,10 @@ export async function listTeams(): Promise<
 }
 
 export async function listTeamMemberships(input: {
-  readonly query: PaginationQuery & { readonly userId?: string | undefined; readonly team?: readonly string[] | undefined };
+  readonly query: PaginationQuery & {
+    readonly userId?: string | undefined;
+    readonly team?: readonly string[] | undefined;
+  };
 }): Promise<PageResult<TeamMembershipDto>> {
   const page = await listLive<TeamMembershipRow>({
     table: 'staff_team_memberships',
@@ -117,7 +123,10 @@ export async function patchTeamMembership(input: {
   readonly auth: AuthContext;
   readonly request: Request;
   readonly requestId: string;
-  readonly body: { readonly isLead?: boolean | undefined; readonly allocationPct?: number | null | undefined };
+  readonly body: {
+    readonly isLead?: boolean | undefined;
+    readonly allocationPct?: number | null | undefined;
+  };
 }): Promise<TeamMembershipDto> {
   const patch: Record<string, unknown> = { updated_by: input.auth.userId };
   if (input.body.isLead !== undefined) patch.is_lead = input.body.isLead;

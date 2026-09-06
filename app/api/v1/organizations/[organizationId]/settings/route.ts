@@ -30,7 +30,13 @@ const PUT = withRoute({
   paramSchema: organizationIdParamSchema,
   bodySchema: putOrganizationSettingsBodySchema,
   handler: async ({ params, body, auth, request, requestId }) =>
-    putOrganizationSettings({ organizationId: params.organizationId, body, auth, request, requestId }),
+    putOrganizationSettings({
+      organizationId: params.organizationId,
+      body,
+      auth,
+      request,
+      requestId,
+    }),
 });
 
 export { GET, PUT };

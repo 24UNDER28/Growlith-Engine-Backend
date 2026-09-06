@@ -51,29 +51,36 @@ function sanitizeFileName(name: string): string {
   return name.replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 180);
 }
 
-const STORAGE_PATH_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/attachment\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[A-Za-z0-9._-]+$/;
+const STORAGE_PATH_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/attachment\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[A-Za-z0-9._-]+$/;
 
 export function validateStoragePath(path: string, organizationId: string): void {
   if (path.includes('..') || path.includes('\\')) {
-    throw ApiError.validation(
-      [{ path: 'storagePath', code: 'custom', message: 'storagePath must not contain path traversal sequences.' }],
-    );
+    throw ApiError.validation([
+      {
+        path: 'storagePath',
+        code: 'custom',
+        message: 'storagePath must not contain path traversal sequences.',
+      },
+    ]);
   }
   if (!path.startsWith(`${organizationId}/`)) {
-    throw ApiError.validation(
-      [{ path: 'storagePath', code: 'custom', message: 'storagePath must begin with the organization id.' }],
-    );
+    throw ApiError.validation([
+      {
+        path: 'storagePath',
+        code: 'custom',
+        message: 'storagePath must begin with the organization id.',
+      },
+    ]);
   }
   if (!STORAGE_PATH_RE.test(path)) {
-    throw ApiError.validation(
-      [
-        {
-          path: 'storagePath',
-          code: 'custom',
-          message: 'storagePath must match {orgId}/attachment/{uuid}/{sanitized filename}.',
-        },
-      ],
-    );
+    throw ApiError.validation([
+      {
+        path: 'storagePath',
+        code: 'custom',
+        message: 'storagePath must match {orgId}/attachment/{uuid}/{sanitized filename}.',
+      },
+    ]);
   }
 }
 
@@ -92,9 +99,11 @@ export async function listFiles(input: {
     allowedSorts: ['createdAt'],
     apply: (q) => {
       let next = q;
-      if (input.query.organizationId !== undefined) next = next.eq('organization_id', input.query.organizationId);
+      if (input.query.organizationId !== undefined)
+        next = next.eq('organization_id', input.query.organizationId);
       if (input.query.projectId !== undefined) next = next.eq('project_id', input.query.projectId);
-      if (input.query.deliverableId !== undefined) next = next.eq('deliverable_id', input.query.deliverableId);
+      if (input.query.deliverableId !== undefined)
+        next = next.eq('deliverable_id', input.query.deliverableId);
       if (input.query.taskId !== undefined) next = next.eq('task_id', input.query.taskId);
       if (input.query.reportId !== undefined) next = next.eq('report_id', input.query.reportId);
       return next;
@@ -117,8 +126,9 @@ export type FileParentInput = {
 };
 
 export async function resolveFileParentTenant(body: FileParentInput): Promise<string | null> {
-  const parents: Array<readonly ['projects' | 'deliverables' | 'tasks' | 'reports' | 'comments', string]> =
-    [];
+  const parents: Array<
+    readonly ['projects' | 'deliverables' | 'tasks' | 'reports' | 'comments', string]
+  > = [];
   if (body.projectId !== undefined) parents.push(['projects', body.projectId]);
   if (body.deliverableId !== undefined) parents.push(['deliverables', body.deliverableId]);
   if (body.taskId !== undefined) parents.push(['tasks', body.taskId]);
@@ -137,10 +147,12 @@ export async function resolveFileParentTenant(body: FileParentInput): Promise<st
   return body.organizationId ?? null;
 }
 
-export async function mintUploadUrl(input: FileParentInput & {
-  readonly fileName: string;
-  readonly mimeType: string;
-}): Promise<{
+export async function mintUploadUrl(
+  input: FileParentInput & {
+    readonly fileName: string;
+    readonly mimeType: string;
+  },
+): Promise<{
   readonly storagePath: string;
   readonly uploadUrl: string;
   readonly token: string;
@@ -149,13 +161,23 @@ export async function mintUploadUrl(input: FileParentInput & {
   const organizationId = await resolveFileParentTenant(input);
   if (organizationId === null) {
     throw ApiError.validation([
-      { path: 'organizationId', code: 'required', message: 'A parent or organizationId is required.' },
+      {
+        path: 'organizationId',
+        code: 'required',
+        message: 'A parent or organizationId is required.',
+      },
     ]);
   }
   // M-2: Enforce MIME allowlist at upload URL minting
   if (!isAllowedMime(input.mimeType)) {
     throw ApiError.validation(
-      [{ path: 'mimeType', code: 'custom', message: `MIME type ${input.mimeType} is not allowed.` }],
+      [
+        {
+          path: 'mimeType',
+          code: 'custom',
+          message: `MIME type ${input.mimeType} is not allowed.`,
+        },
+      ],
       'The MIME type is not allowed.',
     );
   }
@@ -200,7 +222,11 @@ export async function registerFile(input: {
   const organizationId = await resolveFileParentTenant(input.body);
   if (organizationId === null) {
     throw ApiError.validation([
-      { path: 'organizationId', code: 'required', message: 'A parent or organizationId is required.' },
+      {
+        path: 'organizationId',
+        code: 'required',
+        message: 'A parent or organizationId is required.',
+      },
     ]);
   }
   // M-3: Strict path validation
@@ -208,17 +234,28 @@ export async function registerFile(input: {
   // M-2: MIME allowlist at registration (defense in depth)
   if (!isAllowedMime(input.body.mimeType)) {
     throw ApiError.validation(
-      [{ path: 'mimeType', code: 'custom', message: `MIME type ${input.body.mimeType} is not allowed.` }],
+      [
+        {
+          path: 'mimeType',
+          code: 'custom',
+          message: `MIME type ${input.body.mimeType} is not allowed.`,
+        },
+      ],
       'The MIME type is not allowed.',
     );
   }
   // M-3: Verify object exists via storage info, and validate size/mime against observed values
   {
     const supabase = await createSupabaseServerClient();
-    const { data: info, error: infoError } = await (supabase.storage.from(BUCKET) as unknown as {
-      info: (path: string) => Promise<{ data: { size: number; metadata?: { mimetype?: string }; contentType?: string } | null; error: { message: string } | null }>;
-      exists: (path: string) => Promise<{ data: boolean; error: unknown | null }>;
-    }).info(input.body.storagePath);
+    const { data: info, error: infoError } = await (
+      supabase.storage.from(BUCKET) as unknown as {
+        info: (path: string) => Promise<{
+          data: { size: number; metadata?: { mimetype?: string }; contentType?: string } | null;
+          error: { message: string } | null;
+        }>;
+        exists: (path: string) => Promise<{ data: boolean; error: unknown | null }>;
+      }
+    ).info(input.body.storagePath);
     // Fallback to exists if info not available in this storage-js version
     let exists = false;
     let observedSize: number | null = null;
@@ -231,9 +268,11 @@ export async function registerFile(input: {
         (info as unknown as { metadata?: { mimetype?: string } }).metadata?.mimetype ??
         null;
     } else {
-      const { data: existsData, error: existsError } = await (supabase.storage.from(BUCKET) as unknown as {
-        exists: (path: string) => Promise<{ data: boolean; error: unknown | null }>;
-      }).exists(input.body.storagePath);
+      const { data: existsData, error: existsError } = await (
+        supabase.storage.from(BUCKET) as unknown as {
+          exists: (path: string) => Promise<{ data: boolean; error: unknown | null }>;
+        }
+      ).exists(input.body.storagePath);
       if (existsError === null && existsData === true) {
         exists = true;
       }
@@ -324,7 +363,11 @@ export async function patchFile(input: {
   readonly auth: AuthContext;
   readonly request: Request;
   readonly requestId: string;
-  readonly body: { readonly fileName?: string | undefined; readonly fileKind?: Row['file_kind'] | undefined; readonly clientVisible?: boolean | undefined };
+  readonly body: {
+    readonly fileName?: string | undefined;
+    readonly fileKind?: Row['file_kind'] | undefined;
+    readonly clientVisible?: boolean | undefined;
+  };
 }): Promise<FileDto> {
   const existing = await loadLive<Row>('files', input.id);
   if (input.auth.platformRole === null && existing.uploaded_by !== input.auth.userId) {

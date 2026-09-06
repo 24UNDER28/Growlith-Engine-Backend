@@ -51,8 +51,10 @@ export async function listServices(input: {
     allowedSorts: ['createdAt', 'startDate'],
     apply: (q) => {
       let next = q;
-      if (input.query.organizationId !== undefined) next = next.eq('organization_id', input.query.organizationId);
-      if (input.query.engagementId !== undefined) next = next.eq('engagement_id', input.query.engagementId);
+      if (input.query.organizationId !== undefined)
+        next = next.eq('organization_id', input.query.organizationId);
+      if (input.query.engagementId !== undefined)
+        next = next.eq('engagement_id', input.query.engagementId);
       if (input.query.status !== undefined && input.query.status.length > 0) {
         next = next.in('status', [...input.query.status]);
       }

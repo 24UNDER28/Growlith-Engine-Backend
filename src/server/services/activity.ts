@@ -2,14 +2,21 @@ import 'server-only';
 
 import type { AuthContext } from '@/lib/auth/context';
 import type { PageResult } from '@/lib/types/pagination';
-import { toStatusTransitionDto, type ActivityDto, type StatusTransitionDto } from '@/lib/dto/mappers';
+import {
+  toStatusTransitionDto,
+  type ActivityDto,
+  type StatusTransitionDto,
+} from '@/lib/dto/mappers';
 import { activityPaginationMeta, pageFromQuery } from '@/server/api/page';
 import { throwIfError } from '@/server/db/errors';
 import { createSupabaseServerClient } from '@/server/supabase/client-server';
 import type { PaginationQuery } from '@/lib/validation/pagination';
 
 export async function listStaffActivity(input: {
-  readonly query: PaginationQuery & { readonly organizationId?: string | undefined; readonly entityKind?: string | undefined };
+  readonly query: PaginationQuery & {
+    readonly organizationId?: string | undefined;
+    readonly entityKind?: string | undefined;
+  };
 }): Promise<PageResult<ActivityDto>> {
   const page = pageFromQuery(input.query, 'occurredAt');
   const supabase = await createSupabaseServerClient();
@@ -68,15 +75,16 @@ export async function listClientActivity(input: {
     p_before: input.before ?? null,
   });
   throwIfError(error, 'read');
-  const rows = (data as
-    | {
-        occurred_at: string;
-        entity_kind: string;
-        entity_id: string;
-        action: string;
-        display_title: string;
-      }[]
-    | null) ?? [];
+  const rows =
+    (data as
+      | {
+          occurred_at: string;
+          entity_kind: string;
+          entity_id: string;
+          action: string;
+          display_title: string;
+        }[]
+      | null) ?? [];
   const hasMore = rows.length === limit;
   const last = rows[rows.length - 1];
   return {
@@ -95,7 +103,9 @@ export async function listClientActivity(input: {
   };
 }
 
-export async function listStatusTransitions(entityKind?: string | undefined): Promise<readonly StatusTransitionDto[]> {
+export async function listStatusTransitions(
+  entityKind?: string | undefined,
+): Promise<readonly StatusTransitionDto[]> {
   const supabase = await createSupabaseServerClient();
   let q = supabase.from('status_transitions').select('*').order('entity_kind').order('from_status');
   if (entityKind !== undefined) {

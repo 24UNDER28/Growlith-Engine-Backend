@@ -20,7 +20,8 @@ const GET = withRoute({
   summary: 'list organization members',
   paramSchema: organizationIdParamSchema,
   querySchema: membersListQuerySchema,
-  handler: async ({ params, query }) => listMembers({ organizationId: params.organizationId, query }),
+  handler: async ({ params, query }) =>
+    listMembers({ organizationId: params.organizationId, query }),
 });
 
 const POST = withRoute({

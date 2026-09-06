@@ -32,7 +32,11 @@ const CLIENT_FORBIDDEN_RESOURCES: readonly PermissionResource[] = [
 
 const INFRA_TABLES = new Set(['idempotency_keys']);
 
-function grantKind(role: Role, resource: PermissionResource, action: (typeof PERMISSION_ACTIONS)[number]) {
+function grantKind(
+  role: Role,
+  resource: PermissionResource,
+  action: (typeof PERMISSION_ACTIONS)[number],
+) {
   return PERMISSION_MATRIX[role][resource][action].kind;
 }
 
@@ -90,9 +94,10 @@ describe('L2 invariant 3 — CLIENT_MEMBER ⊂ CLIENT_ADMIN', () => {
     const admin = new Set(capabilitiesHeldByRole('CLIENT_ADMIN'));
     const member = capabilitiesHeldByRole('CLIENT_MEMBER');
     for (const capability of member) {
-      expect(admin.has(capability), `CLIENT_MEMBER holds ${capability} that CLIENT_ADMIN does not`).toBe(
-        true,
-      );
+      expect(
+        admin.has(capability),
+        `CLIENT_MEMBER holds ${capability} that CLIENT_ADMIN does not`,
+      ).toBe(true);
     }
     expect(member.length).toBeLessThan(admin.size);
   });
@@ -103,7 +108,10 @@ describe('L2 invariant 4 — ADMIN ⊂ SUPER_ADMIN', () => {
     const superAdmin = new Set(capabilitiesHeldByRole('SUPER_ADMIN'));
     const admin = capabilitiesHeldByRole('ADMIN');
     for (const capability of admin) {
-      expect(superAdmin.has(capability), `ADMIN holds ${capability} that SUPER_ADMIN does not`).toBe(true);
+      expect(
+        superAdmin.has(capability),
+        `ADMIN holds ${capability} that SUPER_ADMIN does not`,
+      ).toBe(true);
     }
     expect(admin.length).toBeLessThan(superAdmin.size);
   });
@@ -156,9 +164,10 @@ describe('L2 invariant 7 — every public table maps to exactly one resource', (
     for (const resource of PERMISSION_RESOURCES) {
       for (const table of RESOURCE_TABLES[resource]) {
         if (table === 'storage.objects') continue;
-        expect(mapped.has(table), `${table} is claimed by both ${mapped.get(table)} and ${resource}`).toBe(
-          false,
-        );
+        expect(
+          mapped.has(table),
+          `${table} is claimed by both ${mapped.get(table)} and ${resource}`,
+        ).toBe(false);
         mapped.set(table, resource);
       }
     }
@@ -219,10 +228,9 @@ describe('Phase 5 coverage — every ALLOW capability is a route, a delegation, 
         (role) => PERMISSION_MATRIX[role][parsed.resource][parsed.action].kind === 'ALLOW',
       );
       if (!held) {
-        expect(
-          routes.has(capability),
-          `dead capability ${capability} is declared on a route`,
-        ).toBe(false);
+        expect(routes.has(capability), `dead capability ${capability} is declared on a route`).toBe(
+          false,
+        );
         continue;
       }
       if (DELEGATED.has(capability) || ABSENT.has(capability)) continue;

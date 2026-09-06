@@ -32,7 +32,21 @@ export async function replayIdempotent(input: {
   const requestHash = hashRequest(input.request, input.body);
   const service = getSupabaseServiceClient();
 
-  const { data, error } = (await (service as unknown as { from: (t: string) => { select: (c: string) => { eq: (...a: unknown[]) => { eq: (...a: unknown[]) => { eq: (...a: unknown[]) => { maybeSingle: () => Promise<{ data: unknown; error: unknown }> } } } } } })
+  const { data, error } = (await (
+    service as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (...a: unknown[]) => {
+            eq: (...a: unknown[]) => {
+              eq: (...a: unknown[]) => {
+                maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+              };
+            };
+          };
+        };
+      };
+    }
+  )
     .from('idempotency_keys')
     .select('request_hash, status_code, response_body, response_headers, created_at, expires_at')
     .eq('actor_user_id', input.actorUserId)
@@ -87,9 +101,7 @@ export async function replayIdempotent(input: {
     }
   }
   if (data.request_hash !== requestHash) {
-    throw ApiError.conflict(
-      'This Idempotency-Key was already used with a different request body.',
-    );
+    throw ApiError.conflict('This Idempotency-Key was already used with a different request body.');
   }
   const headers =
     data.response_headers !== null &&

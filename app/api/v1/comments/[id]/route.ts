@@ -1,6 +1,11 @@
 import { withRoute } from '@/server/api/with-route';
 import { tenantFromRow } from '@/server/api/tenant';
-import { commentAuthorForGuard, deleteComment, getComment, patchComment } from '@/server/services/comments';
+import {
+  commentAuthorForGuard,
+  deleteComment,
+  getComment,
+  patchComment,
+} from '@/server/services/comments';
 import { idParamSchema, patchCommentBodySchema } from '@/lib/validation/resources';
 
 export const runtime = 'nodejs';

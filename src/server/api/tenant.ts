@@ -37,14 +37,14 @@ export function tenantFromRow(
     }
     const supabase = await createSupabaseServerClient();
     const selectable =
-      table === 'organizations' ? 'id' : table === 'notifications' ? 'organization_id' : 'organization_id';
+      table === 'organizations'
+        ? 'id'
+        : table === 'notifications'
+          ? 'organization_id'
+          : 'organization_id';
     const column = table === 'organizations' ? 'id' : 'id';
     let query = supabase.from(table).select(selectable).eq(column, id);
-    if (
-      table !== 'invitations' &&
-      table !== 'notifications' &&
-      table !== 'metrics'
-    ) {
+    if (table !== 'invitations' && table !== 'notifications' && table !== 'metrics') {
       query = query.is('deleted_at', null);
     }
     const { data, error } = await query.maybeSingle();

@@ -76,7 +76,13 @@ describe('PATCH /files/{id} — clientVisible is staff-only (L-6)', () => {
   it('refuses a CLIENT flipping clientVisible on its own upload', async () => {
     const request = new Request('http://localhost/api/v1/files/file-1', { method: 'PATCH' });
     await expect(
-      patchFile({ id: 'file-1', body: { clientVisible: true }, auth: CLIENT, request, requestId: 'r1' }),
+      patchFile({
+        id: 'file-1',
+        body: { clientVisible: true },
+        auth: CLIENT,
+        request,
+        requestId: 'r1',
+      }),
     ).rejects.toMatchObject({ status: 422, code: ErrorCode.ValidationFailed });
 
     expect(crudMock.updateLive).not.toHaveBeenCalled();
@@ -87,7 +93,13 @@ describe('PATCH /files/{id} — clientVisible is staff-only (L-6)', () => {
     crudMock.updateLive.mockResolvedValue({ ...ROW, file_name: 'renamed.pdf' });
     const request = new Request('http://localhost/api/v1/files/file-1', { method: 'PATCH' });
     await expect(
-      patchFile({ id: 'file-1', body: { fileName: 'renamed.pdf' }, auth: CLIENT, request, requestId: 'r1' }),
+      patchFile({
+        id: 'file-1',
+        body: { fileName: 'renamed.pdf' },
+        auth: CLIENT,
+        request,
+        requestId: 'r1',
+      }),
     ).resolves.toMatchObject({ fileName: 'renamed.pdf' });
     expect(crudMock.updateLive).toHaveBeenCalledTimes(1);
   });
@@ -97,7 +109,13 @@ describe('PATCH /files/{id} — clientVisible is staff-only (L-6)', () => {
     const request = new Request('http://localhost/api/v1/files/file-1', { method: 'PATCH' });
     const STAFF: AuthContext = { ...CLIENT, userType: 'INTERNAL', platformRole: 'ADMIN' };
     await expect(
-      patchFile({ id: 'file-1', body: { clientVisible: true }, auth: STAFF, request, requestId: 'r1' }),
+      patchFile({
+        id: 'file-1',
+        body: { clientVisible: true },
+        auth: STAFF,
+        request,
+        requestId: 'r1',
+      }),
     ).resolves.toMatchObject({ clientVisible: true });
     expect(crudMock.updateLive).toHaveBeenCalledTimes(1);
   });

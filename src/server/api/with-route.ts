@@ -3,7 +3,11 @@ import 'server-only';
 import { z } from 'zod';
 
 import type { AuthContext } from '@/lib/auth/context';
-import { PERMISSION_MATRIX, type Capability, type PermissionQualifier } from '@/lib/domain/permissions';
+import {
+  PERMISSION_MATRIX,
+  type Capability,
+  type PermissionQualifier,
+} from '@/lib/domain/permissions';
 import type { EntityKind } from '@/lib/domain/entities';
 import type { PageResult } from '@/lib/types/pagination';
 import { authorize } from '@/server/auth/authorize';
@@ -17,7 +21,10 @@ import { requireAuthContext } from '@/server/auth/context';
 import { createLogger, type Logger } from '@/server/logging/logger';
 import { enforceRateLimit } from '@/server/api/rate-limit';
 
-/** Rate-limit class. Declared now; the limiter itself arrives in Phase 6. */
+/**
+ * Rate-limit class. Enforced by `enforceRateLimit` (C-1): absent means GET ⇒
+ * `read`, everything else ⇒ `mutation`; budgets live in `rate-limit.ts`.
+ */
 export const RATE_CLASSES = ['auth', 'sensitive', 'mutation', 'read', 'export'] as const;
 export type RateClass = (typeof RATE_CLASSES)[number];
 
@@ -183,8 +190,10 @@ export interface RouteDefinitionCore<
   readonly bodySchema?: z.ZodType<TBody>;
   readonly successStatus?: SuccessStatusCode;
   /**
-   * Declaration-only rate class (Phase 6 owns the limiter). Logged on every
-   * access line so the class is observable before the mechanism exists.
+   * Rate class enforced after authentication and before authorization
+   * (C-1): 429 + `Retry-After` once the class budget is spent, keyed by
+   * user id (or trusted IP, plus the account for the `auth` class). Also
+   * logged on every access line.
    */
   readonly rateLimit?: { readonly class: RateClass };
   /** Serialize the handler result as a list envelope `{ data, pagination, meta }`. */
@@ -810,7 +819,10 @@ function isInternalOnlyCapability(capability: Capability): boolean {
   const resource = capability.slice(0, separator) as keyof typeof PERMISSION_MATRIX.SUPER_ADMIN;
   const action = capability.slice(separator + 1) as string;
   // Type-safe access via matrix
-  const anyMatrix = PERMISSION_MATRIX as unknown as Record<string, Record<string, Record<string, { kind: string }>>>;
+  const anyMatrix = PERMISSION_MATRIX as unknown as Record<
+    string,
+    Record<string, Record<string, { kind: string }>>
+  >;
   const superAllow = anyMatrix.SUPER_ADMIN?.[resource]?.[action]?.kind === 'ALLOW';
   const adminAllow = anyMatrix.ADMIN?.[resource]?.[action]?.kind === 'ALLOW';
   const clientAdminAllow = anyMatrix.CLIENT_ADMIN?.[resource]?.[action]?.kind === 'ALLOW';
@@ -849,7 +861,14 @@ function effectiveMinAalForRequest(input: {
     '/api/v1/auth/password',
     '/api/v1/me',
   ];
-  if (exemptPaths.some((prefix) => input.pathname === prefix || input.pathname.startsWith(prefix + '/') || input.pathname.startsWith(prefix + '?'))) {
+  if (
+    exemptPaths.some(
+      (prefix) =>
+        input.pathname === prefix ||
+        input.pathname.startsWith(prefix + '/') ||
+        input.pathname.startsWith(prefix + '?'),
+    )
+  ) {
     return undefined;
   }
   // More precise: exact match for known exempt routes

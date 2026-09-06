@@ -9,19 +9,19 @@ import { throwIfError } from '@/server/db/errors';
 import { loadLive, updateLive } from '@/server/services/crud';
 import { createSupabaseServerClient } from '@/server/supabase/client-server';
 
-export async function changeStatus<T extends { readonly id: string; readonly status: string; readonly organization_id: string }>(
-  input: {
-    readonly table: string;
-    readonly entityKind: EntityKind;
-    readonly id: string;
-    readonly toStatus: string;
-    readonly reason?: string | undefined;
-    readonly auth: AuthContext;
-    readonly request: Request;
-    readonly requestId: string;
-    readonly extra?: Record<string, unknown> | undefined;
-  },
-): Promise<T> {
+export async function changeStatus<
+  T extends { readonly id: string; readonly status: string; readonly organization_id: string },
+>(input: {
+  readonly table: string;
+  readonly entityKind: EntityKind;
+  readonly id: string;
+  readonly toStatus: string;
+  readonly reason?: string | undefined;
+  readonly auth: AuthContext;
+  readonly request: Request;
+  readonly requestId: string;
+  readonly extra?: Record<string, unknown> | undefined;
+}): Promise<T> {
   const row = await loadLive<T>(input.table, input.id);
   await assertTransitionAllowed(
     input.entityKind,
@@ -40,7 +40,10 @@ export async function changeStatus<T extends { readonly id: string; readonly sta
     .eq('to_status', input.toStatus)
     .maybeSingle();
   throwIfError(error, 'read');
-  if (edge?.requires_reason === true && (input.reason === undefined || input.reason.trim() === '')) {
+  if (
+    edge?.requires_reason === true &&
+    (input.reason === undefined || input.reason.trim() === '')
+  ) {
     throw ApiError.validation(
       [{ path: 'reason', code: 'required', message: 'reason is required for this transition.' }],
       'The request failed validation.',
