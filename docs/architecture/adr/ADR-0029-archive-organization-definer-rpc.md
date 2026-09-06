@@ -9,8 +9,8 @@ authors the RPC (the closed set grows only by ADR — authorization §14).
 The Phase 4 capability matrix grants `organization:delete` as `●[R] ✗ ✗ ✗`
 — SUPER_ADMIN only, and marked `[R]`: reachable only through a
 `SECURITY DEFINER` RPC, because the direct write is not the sanctioned path.
-The annotation explains why: *"Soft delete; purge is a separate SUPER_ADMIN
-RPC that audits first."*
+The annotation explains why: _"Soft delete; purge is a separate SUPER_ADMIN
+RPC that audits first."_
 
 Phase 4 implemented the purge half (`purge_organization()` in the workflow
 RPCs migration) but not the soft-delete half — the matrix row predates the
@@ -21,7 +21,7 @@ question the `[R]` marker poses: through what definer does the soft delete
 run?
 
 The honest options are two. A service-layer soft delete through the user-JWT
-client is *possible* (RLS allows SUPER_ADMIN the UPDATE) but contradicts the
+client is _possible_ (RLS allows SUPER_ADMIN the UPDATE) but contradicts the
 matrix cell's own `[R]` qualifier, and — worse — splits an irreversible-class
 operation across layers: the audit-first requirement, the slug confirmation
 and the live-children refusal would live in application code, where they can
@@ -32,13 +32,13 @@ for tenant destruction.
 ## Decision
 
 1. **Add `public.archive_organization(p_organization_id uuid, p_reason text,
-   p_confirm_slug text)` to the closed definer-RPC set** (authorization §14),
+p_confirm_slug text)` to the closed definer-RPC set** (authorization §14),
    authored in the Phase 5 implementation migrations.
 2. **Behaviour, in one transaction:** verify the caller is an active
    SUPER_ADMIN (re-checked from the database, never from an argument);
    verify `p_confirm_slug` equals the organization's `slug` (the purge
    pattern — destruction requires typing the tenant's name); refuse while
-   live engagements exist (the organization is archived *down* the
+   live engagements exist (the organization is archived _down_ the
    hierarchy, never out from under live work — 409 `has_active_children`);
    **write the CRITICAL `SOFT_DELETE` audit row first**; then set
    `deleted_at`/`deleted_by` and cascade the soft delete to the

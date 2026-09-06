@@ -50,7 +50,7 @@ rejected on three grounds:
   which the repository's rules treat as worse than absence (Rules 8 and 14:
   nothing stands in for a thing that does not exist).
 - Envelope uniformity buys nothing here that the typed client cannot provide
-  cheaper: one branch on "unparseable error body" covers 405 *and* any other
+  cheaper: one branch on "unparseable error body" covers 405 _and_ any other
   framework-level response (e.g. edge rewrites) the application does not
   control.
 

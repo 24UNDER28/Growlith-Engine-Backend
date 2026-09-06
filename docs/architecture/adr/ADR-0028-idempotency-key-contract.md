@@ -23,14 +23,14 @@ live in `withRoute`'s pipeline so a handler cannot forget it.
 ## Decision
 
 1. **Three tiers, defined in `api.md` §13:**
-   - *Idempotent by construction* — GETs, all action endpoints
+   - _Idempotent by construction_ — GETs, all action endpoints
      (`status`/`assign`/`approve`/`publish`/…: a repeat meets the already-
      reached state and answers 409 naming it, or is a no-op), DELETE
      (repeat ⇒ 404, which is the desired end state), logout.
-   - *Conflict-guarded creates* — creates with a natural uniqueness
+   - _Conflict-guarded creates_ — creates with a natural uniqueness
      constraint (invitations, organization members): a blind retry answers
-     409 pointing at the existing row, which *is* the answer.
-   - *`Idempotency-Key` creates* — every remaining POST create requires the
+     409 pointing at the existing row, which _is_ the answer.
+   - _`Idempotency-Key` creates_ — every remaining POST create requires the
      header: organizations, engagements, services, projects, project
      memberships, tasks, deliverables, reports, comments, file registration,
      upload-URL minting.
@@ -60,7 +60,7 @@ live in `withRoute`'s pipeline so a handler cannot forget it.
   named mechanisms — the property is provable per endpoint, and the
   contract tests (`api.md` §18 L3) assert replay, reuse and
   not-consumed-on-4xx.
-- The key is an *actor* secret in practice (scoped per user), so keys never
+- The key is an _actor_ secret in practice (scoped per user), so keys never
   cross tenants and a replayed response can never be served to a different
   caller; the scope triple makes that structural.
 - 24 h is a window, not a guarantee: clients that retry after expiry get a

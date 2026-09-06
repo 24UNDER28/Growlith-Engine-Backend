@@ -48,46 +48,46 @@ The design answers five questions the earlier phases left to Phase 5:
 2. **The CORS question**: resolved — none, same-origin only (ADR-0014).
 3. **Idempotency**: POST creates carry an `Idempotency-Key` contract
    (ADR-0028); everything else is idempotent by construction or answers 409.
-4. **Rate limiting**: Phase 6's mechanism, but the *hook* is designed now — a
+4. **Rate limiting**: Phase 6's mechanism, but the _hook_ is designed now — a
    declared class per route, an enforcement point in `withRoute`, and the 429
    shape ([§10](#10-rate-limiting-hooks)).
 5. **The client/portal surface**: there is **no separate client API**. A
    "client" is a user whose role is scoped to an organization, and the portal
-   consumes the *same* endpoints the admin dashboard does, narrowed by the
+   consumes the _same_ endpoints the admin dashboard does, narrowed by the
    matrix, the column grants and RLS ([Part II §E](#e-clients)).
 
 **No fake endpoints.** Every route in Part II is backed by (a) an existing
 table or definer RPC from Phases 2–4 and (b) at least one `ALLOW` cell in the
 capability matrix. Where no capability exists there is no endpoint — metrics
 ingestion, notification creation, team CRUD and user creation are therefore
-*absent by construction*, and each absence is recorded in
+_absent by construction_, and each absence is recorded in
 [§17](#17-deliberate-absences).
 
 ### Route census
 
-| Family                                    | Endpoints | Status                                  |
-| ----------------------------------------- | :-------: | --------------------------------------- |
-| Health                                    |     1     | Implemented (Phase 1)                   |
-| Auth (`/api/v1/auth/**`)                  |     9     | Implemented (Phase 3)                   |
-| Invitations                               |     5     | 3 implemented (Phase 3), 2 designed     |
-| Accounts lifecycle                        |     4     | Implemented (Phase 3)                   |
-| Self, users, erasure                      |     5     | Designed                                |
-| Organization members                      |     4     | Designed (RPC-backed)                   |
-| Platform grants                           |     3     | Designed (RPC-backed)                   |
-| Team staffing                             |     5     | Designed                                |
-| Organizations                             |     9     | Designed                                |
-| Engagements                               |     7     | Designed                                |
-| Services                                  |     7     | Designed                                |
-| Projects (+ memberships)                  |    11     | Designed                                |
-| Tasks                                     |     7     | Designed                                |
-| Deliverables (+ versions/reviews)         |    11     | Designed                                |
-| Reports (+ metrics)                       |     8     | Designed                                |
-| Files                                     |     7     | Designed                                |
-| Comments                                  |     5     | Designed                                |
-| Notifications                             |     3     | Designed                                |
-| Activity                                  |     2     | Designed                                |
-| Reference (`status-transitions`)          |     1     | Designed                                |
-| **Total**                                 | **114**   | 17 implemented · 97 designed            |
+| Family                            | Endpoints | Status                              |
+| --------------------------------- | :-------: | ----------------------------------- |
+| Health                            |     1     | Implemented (Phase 1)               |
+| Auth (`/api/v1/auth/**`)          |     9     | Implemented (Phase 3)               |
+| Invitations                       |     5     | 3 implemented (Phase 3), 2 designed |
+| Accounts lifecycle                |     4     | Implemented (Phase 3)               |
+| Self, users, erasure              |     5     | Designed                            |
+| Organization members              |     4     | Designed (RPC-backed)               |
+| Platform grants                   |     3     | Designed (RPC-backed)               |
+| Team staffing                     |     5     | Designed                            |
+| Organizations                     |     9     | Designed                            |
+| Engagements                       |     7     | Designed                            |
+| Services                          |     7     | Designed                            |
+| Projects (+ memberships)          |    11     | Designed                            |
+| Tasks                             |     7     | Designed                            |
+| Deliverables (+ versions/reviews) |    11     | Designed                            |
+| Reports (+ metrics)               |     8     | Designed                            |
+| Files                             |     7     | Designed                            |
+| Comments                          |     5     | Designed                            |
+| Notifications                     |     3     | Designed                            |
+| Activity                          |     2     | Designed                            |
+| Reference (`status-transitions`)  |     1     | Designed                            |
+| **Total**                         |  **114**  | 17 implemented · 97 designed        |
 
 ---
 
@@ -123,7 +123,7 @@ ingestion, notification creation, team CRUD and user creation are therefore
    unparseable error body as a first-class case (ADR-0027).
 7. **`organization_id` never appears in a request body or query as the tenant
    of a write.** It is derived from the parent row (trigger + composite FK,
-   README §D). Where a list *filters* by organization, the parameter is named
+   README §D). Where a list _filters_ by organization, the parameter is named
    `organizationId` and is a filter, not a target ([§9](#9-filtering-and-sorting-conventions)).
 
 ## 2. The request pipeline
@@ -132,18 +132,18 @@ The order is fixed by `withRoute` and is identical for every route (README §D,
 authorization §I.3). Phase 5 inserts exactly one new step — the idempotency
 replay check — and pins its position:
 
-| Step                    | Rejects as                        | Notes                                                             |
-| ----------------------- | --------------------------------- | ----------------------------------------------------------------- |
-| request id              | —                                 | caller-supplied or minted; echoed in `x-request-id`               |
-| method                  | 405 (declaration mismatch only)   | framework 405s never reach the handler (ADR-0027)                 |
-| params / query / body   | 422 `VALIDATION_FAILED` (400 for unparseable JSON / oversize) | `.strict()`: unknown keys rejected |
-| authentication          | 401 / 403 `INVITATION_PENDING` / 423 | `requireAuthContext()`, incl. `minAal` floor                |
-| tenant resolution       | 404 `NOT_FOUND`                   | log-only; never audited (probes must not mint audit rows)         |
-| capability              | 403 `FORBIDDEN` / `MFA_REQUIRED`  | `PERMISSION_DENIED` audit at WARNING                              |
-| idempotency             | replay stored response / 409      | creates that declare it ([§13](#13-idempotency-requirements))     |
-| handler / service layer | 404 / 409 / 503                   | RLS applies on every read and write                               |
-| envelope + headers      | —                                 | `no-store`, `x-request-id`                                        |
-| structured log          | —                                 | one line per request ([§11](#11-logging-strategy))                |
+| Step                    | Rejects as                                                    | Notes                                                         |
+| ----------------------- | ------------------------------------------------------------- | ------------------------------------------------------------- |
+| request id              | —                                                             | caller-supplied or minted; echoed in `x-request-id`           |
+| method                  | 405 (declaration mismatch only)                               | framework 405s never reach the handler (ADR-0027)             |
+| params / query / body   | 422 `VALIDATION_FAILED` (400 for unparseable JSON / oversize) | `.strict()`: unknown keys rejected                            |
+| authentication          | 401 / 403 `INVITATION_PENDING` / 423                          | `requireAuthContext()`, incl. `minAal` floor                  |
+| tenant resolution       | 404 `NOT_FOUND`                                               | log-only; never audited (probes must not mint audit rows)     |
+| capability              | 403 `FORBIDDEN` / `MFA_REQUIRED`                              | `PERMISSION_DENIED` audit at WARNING                          |
+| idempotency             | replay stored response / 409                                  | creates that declare it ([§13](#13-idempotency-requirements)) |
+| handler / service layer | 404 / 409 / 503                                               | RLS applies on every read and write                           |
+| envelope + headers      | —                                                             | `no-store`, `x-request-id`                                    |
+| structured log          | —                                                             | one line per request ([§11](#11-logging-strategy))            |
 
 Validation runs before authentication (cheap, local, no privileged work for a
 malformed request); capability runs after authentication and before any row is
@@ -177,14 +177,14 @@ Every `required` route declares exactly one `capability` from the matrix
 (`src/lib/domain/permissions.ts`). Phase 5's catalogue fixes how each route
 fills the authorization fields:
 
-| Field        | Convention                                                                                              |
-| ------------ | ------------------------------------------------------------------------------------------------------- |
-| `capability` | The matrix cell that answers "may this actor attempt this verb". One route, one capability — `withRoute` types it as a single `Capability`, so an endpoint needing two verbs is two endpoints |
-| `tenant`     | Where the organization comes from: **path** (nested collections), **row** (flat item routes load the row through the caller's RLS; invisible ⇒ `null` ⇒ 404), **query/body** (lists filtered by `organizationId`), **shared-org resolver** (cross-cutting reads of a person), or **absent** (GLOBAL/SELF cells only) |
-| `project`    | Set on every `[P]`-qualified route so the guard evaluates §5-rule-3 for ADMIN and passes the project id through for object-side rules |
-| `subjectUser`| Set where a SELF-scoped capability names a person in the path (`/accounts/{userId}/**`)                |
-| `minAal`     | `2` for the power-changing set below; absent otherwise                                                  |
-| `denialSubject` | Set wherever the route can name the target without loading it, so a denial audit is not "denied about nothing" |
+| Field           | Convention                                                                                                                                                                                                                                                                                                           |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `capability`    | The matrix cell that answers "may this actor attempt this verb". One route, one capability — `withRoute` types it as a single `Capability`, so an endpoint needing two verbs is two endpoints                                                                                                                        |
+| `tenant`        | Where the organization comes from: **path** (nested collections), **row** (flat item routes load the row through the caller's RLS; invisible ⇒ `null` ⇒ 404), **query/body** (lists filtered by `organizationId`), **shared-org resolver** (cross-cutting reads of a person), or **absent** (GLOBAL/SELF cells only) |
+| `project`       | Set on every `[P]`-qualified route so the guard evaluates §5-rule-3 for ADMIN and passes the project id through for object-side rules                                                                                                                                                                                |
+| `subjectUser`   | Set where a SELF-scoped capability names a person in the path (`/accounts/{userId}/**`)                                                                                                                                                                                                                              |
+| `minAal`        | `2` for the power-changing set below; absent otherwise                                                                                                                                                                                                                                                               |
+| `denialSubject` | Set wherever the route can name the target without loading it, so a denial audit is not "denied about nothing"                                                                                                                                                                                                       |
 
 **The 404-before-403 rule is absolute** (ADR-0019): tenant-unreachable rows
 answer 404; 403 is only emitted once tenant reach is established. Step-4
@@ -211,7 +211,7 @@ runtime accident: [§18](#18-verification-strategy).
 matrix allows both (authorization §I.5). The mapper picks the DTO by resolved
 role: staff DTOs carry internal-only fields; client DTOs are a separate type
 built from the column-restricted view. A field that is not granted to
-`authenticated` never appears in any DTO — the DTO narrows *further*, it
+`authenticated` never appears in any DTO — the DTO narrows _further_, it
 never widens.
 
 ## 5. Response and DTO conventions
@@ -251,7 +251,7 @@ never widens.
    `current_version`) are what the caller sees.
 6. **No ETags, no conditional requests, no HTTP caching in v1.** Every
    response is `Cache-Control: no-store, max-age=0, must-revalidate`
-   (enforced by `withRoute` *and* at the edge). ETags over RLS-filtered
+   (enforced by `withRoute` _and_ at the edge). ETags over RLS-filtered
    collections would leak visibility changes through validator behaviour;
    revisit only with a consumer that needs them.
 7. **Nulls are returned as `null`**, not omitted — an absent field means "the
@@ -263,27 +263,27 @@ never widens.
 One envelope, one code vocabulary (`src/lib/types/error-codes.ts` — adding a
 code is compatible; renaming one is a version bump), and one mapping:
 
-| Status | Code(s)                                                        | Emitted when                                                                                          |
-| ------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| 400    | `MALFORMED_REQUEST`                                            | body not JSON, body empty where required, malformed `Content-Length`                                  |
-| 401    | `UNAUTHENTICATED`, `INVALID_CREDENTIALS`, `ACCOUNT_DEACTIVATED` | no/invalid session; login credential failure (uniform); offboarded account                        |
-| 403    | `FORBIDDEN`, `MFA_REQUIRED`, `INVITATION_PENDING`              | capability denied *after* tenant reach; aal2 outstanding; not-yet-accepted account                    |
-| 404    | `NOT_FOUND`                                                    | missing row **or row hidden by RLS** — deliberately indistinguishable (ADR-0019)                      |
-| 405    | *(empty body — framework-generated)*                           | verb not exported by the route file (ADR-0027); `withRoute`'s own check covers declaration mismatch   |
-| 409    | `CONFLICT`                                                     | unique violation, illegal state transition, idempotency-key reuse with a different body, RPC business refusal |
-| 413    | `PAYLOAD_TOO_LARGE`                                            | body over 1 MiB (declared-length fast path + post-read check)                                         |
-| 422    | `VALIDATION_FAILED`                                            | schema failure — `details[]` carries `{ path, message, code }` issues, the only case `details` exists |
-| 423    | `ACCOUNT_SUSPENDED`                                            | suspended account, any `required` route                                                               |
-| 429    | `TOO_MANY_REQUESTS`                                            | rate limiter (Phase 6; hook [§10](#10-rate-limiting-hooks)) — `Retry-After` header included           |
-| 500    | `INTERNAL_ERROR`                                               | unknown throwable, downgraded; cause logged, never serialized (ADR-0025)                              |
-| 503    | `SERVICE_UNAVAILABLE`                                          | Supabase unreachable — fail closed, `Retry-After` included                                            |
+| Status | Code(s)                                                         | Emitted when                                                                                                  |
+| ------ | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| 400    | `MALFORMED_REQUEST`                                             | body not JSON, body empty where required, malformed `Content-Length`                                          |
+| 401    | `UNAUTHENTICATED`, `INVALID_CREDENTIALS`, `ACCOUNT_DEACTIVATED` | no/invalid session; login credential failure (uniform); offboarded account                                    |
+| 403    | `FORBIDDEN`, `MFA_REQUIRED`, `INVITATION_PENDING`               | capability denied _after_ tenant reach; aal2 outstanding; not-yet-accepted account                            |
+| 404    | `NOT_FOUND`                                                     | missing row **or row hidden by RLS** — deliberately indistinguishable (ADR-0019)                              |
+| 405    | _(empty body — framework-generated)_                            | verb not exported by the route file (ADR-0027); `withRoute`'s own check covers declaration mismatch           |
+| 409    | `CONFLICT`                                                      | unique violation, illegal state transition, idempotency-key reuse with a different body, RPC business refusal |
+| 413    | `PAYLOAD_TOO_LARGE`                                             | body over 1 MiB (declared-length fast path + post-read check)                                                 |
+| 422    | `VALIDATION_FAILED`                                             | schema failure — `details[]` carries `{ path, message, code }` issues, the only case `details` exists         |
+| 423    | `ACCOUNT_SUSPENDED`                                             | suspended account, any `required` route                                                                       |
+| 429    | `TOO_MANY_REQUESTS`                                             | rate limiter (Phase 6; hook [§10](#10-rate-limiting-hooks)) — `Retry-After` header included                   |
+| 500    | `INTERNAL_ERROR`                                                | unknown throwable, downgraded; cause logged, never serialized (ADR-0025)                                      |
+| 503    | `SERVICE_UNAVAILABLE`                                           | Supabase unreachable — fail closed, `Retry-After` included                                                    |
 
 Conventions that keep the table honest:
 
 - **409 carries machine-usable detail.** State-machine refusals and business
   refusals from definer RPCs return `CONFLICT` with `details` shaped like
   validation issues: `{ path: 'status', code: 'invalid_transition', message:
-  '…' }`; RPC-specific refusals use stable `code`s — `invalid_transition`,
+'…' }`; RPC-specific refusals use stable `code`s — `invalid_transition`,
   `duplicate_code`, `last_admin`, `primary_contact_replacement_required`,
   `role_ceiling`, `self_modification`, `reviewer_not_member`,
   `report_not_publishable`, `invitation_state`. These strings are part of the
@@ -351,8 +351,7 @@ and volume-leakage reasons, and `COUNT(*)` is never performed — there is no
   with nothing — re-list from scratch is always valid.
 - `hasMore` is computed by requesting `limit + 1` rows; the extra row is
   never serialized.
-- Empty collections are `200` with `data: []` and `nextCursor: null` — never
-  404.
+- Empty collections are `200` with `data: []` and `nextCursor: null` — never 404.
 
 ## 9. Filtering and sorting conventions
 
@@ -399,13 +398,13 @@ routes:
 3. **Budgets (illustrative defaults — Phase 6 tunes, the classes are the
    contract):**
 
-   | Class       | Budget (per key)          | Rationale                                                |
-   | ----------- | ------------------------- | -------------------------------------------------------- |
-   | `auth`      | 10 / 15 min               | credential attempts; GoTrue's own limits remain the floor |
-   | `sensitive` | 30 / 15 min               | invitations, grants, status changes, MFA                 |
-   | `mutation`  | 300 / 15 min              | ordinary writes                                          |
-   | `read`      | 600 / 15 min              | lists and detail reads                                   |
-   | `export`    | 20 / hour                 | download-URL minting and report export (cost + audit)    |
+   | Class       | Budget (per key) | Rationale                                                 |
+   | ----------- | ---------------- | --------------------------------------------------------- |
+   | `auth`      | 10 / 15 min      | credential attempts; GoTrue's own limits remain the floor |
+   | `sensitive` | 30 / 15 min      | invitations, grants, status changes, MFA                  |
+   | `mutation`  | 300 / 15 min     | ordinary writes                                           |
+   | `read`      | 600 / 15 min     | lists and detail reads                                    |
+   | `export`    | 20 / hour        | download-URL minting and report export (cost + audit)     |
 
 4. **Response.** 429 `TOO_MANY_REQUESTS` envelope with `Retry-After`
    (seconds) and the standard `requestId`. 429s are logged at `warn` with the
@@ -454,22 +453,22 @@ mutation, never for a read unless the matrix says so. The vocabulary is the
 Phase 2 `audit_action` enum — Phase 5 adds **no new audit enum values**; the
 existing set covers the catalogue:
 
-| API event class                                   | `audit_action`    | Default severity | Notes                                                    |
-| ------------------------------------------------- | ----------------- | :--------------: | -------------------------------------------------------- |
-| Creates of tenant data                            | `CREATE`          | NOTICE           | org create is CRITICAL (a tenant is born)                |
-| Field updates, assignments                        | `UPDATE`          | INFO             | `before`/`after` diff limited to changed fields          |
-| Deletes via API (soft)                            | `SOFT_DELETE`     | NOTICE           | org archive is CRITICAL                                  |
-| Status transitions (incl. approve/publish verbs)  | `STATUS_CHANGE`   | INFO             | transition `from → to` in the diff; reopening transitions are CRITICAL by their `allowed_roles` handling |
-| Platform role grant / revoke                      | `ROLE_GRANT` / `ROLE_REVOKE` | CRITICAL | RPC-written                                   |
-| Invitations                                       | `INVITE_SENT` / `INVITE_ACCEPTED` | NOTICE / CRITICAL(staff) | Phase 3 convention, kept |
-| Membership writes                                 | `UPDATE` (or `CREATE`/`SOFT_DELETE`) | CRITICAL | the cross-org edge is always CRITICAL (authorization §C) |
-| Report export / file download                     | `EXPORT` / `FILE_DOWNLOAD` | INFO    | the two reads that are audited                             |
-| Erasure (GDPR)                              | `UPDATE`          | CRITICAL         | RPC-written; the diff names erased columns, never values |
-| Purge                                       | `HARD_DELETE`     | CRITICAL         | RPC writes it *first*                                    |
-| Capability denials                                | `PERMISSION_DENIED` | WARNING        | guard-written, step 5/6 only                             |
+| API event class                                  | `audit_action`                       |     Default severity     | Notes                                                                                                    |
+| ------------------------------------------------ | ------------------------------------ | :----------------------: | -------------------------------------------------------------------------------------------------------- |
+| Creates of tenant data                           | `CREATE`                             |          NOTICE          | org create is CRITICAL (a tenant is born)                                                                |
+| Field updates, assignments                       | `UPDATE`                             |           INFO           | `before`/`after` diff limited to changed fields                                                          |
+| Deletes via API (soft)                           | `SOFT_DELETE`                        |          NOTICE          | org archive is CRITICAL                                                                                  |
+| Status transitions (incl. approve/publish verbs) | `STATUS_CHANGE`                      |           INFO           | transition `from → to` in the diff; reopening transitions are CRITICAL by their `allowed_roles` handling |
+| Platform role grant / revoke                     | `ROLE_GRANT` / `ROLE_REVOKE`         |         CRITICAL         | RPC-written                                                                                              |
+| Invitations                                      | `INVITE_SENT` / `INVITE_ACCEPTED`    | NOTICE / CRITICAL(staff) | Phase 3 convention, kept                                                                                 |
+| Membership writes                                | `UPDATE` (or `CREATE`/`SOFT_DELETE`) |         CRITICAL         | the cross-org edge is always CRITICAL (authorization §C)                                                 |
+| Report export / file download                    | `EXPORT` / `FILE_DOWNLOAD`           |           INFO           | the two reads that are audited                                                                           |
+| Erasure (GDPR)                                   | `UPDATE`                             |         CRITICAL         | RPC-written; the diff names erased columns, never values                                                 |
+| Purge                                            | `HARD_DELETE`                        |         CRITICAL         | RPC writes it _first_                                                                                    |
+| Capability denials                               | `PERMISSION_DENIED`                  |         WARNING          | guard-written, step 5/6 only                                                                             |
 
 Every row carries `actor_user_id`, `entity_kind`, `entity_id`, `request_id`;
-`before`/`after` never include columns the *audited actor* could not read
+`before`/`after` never include columns the _audited actor_ could not read
 (the mapper builds the diff, not the raw row). Client actors never read
 `audit_events` through the API — the projection of [§O](#o-activity) is the
 only client-facing surface.
@@ -489,7 +488,7 @@ Three tiers, in decreasing order of ceremony:
    uniqueness constraint — invitations (unique pending per address/target,
    implemented) and organization members (one live membership per
    person×org) — answer a blind retry with 409 and enough detail to recover
-   the existing row. Acceptable because the conflict *is* the answer.
+   the existing row. Acceptable because the conflict _is_ the answer.
 3. **`Idempotency-Key` creates (ADR-0028).** Every other POST create
    **requires** the header: organizations, engagements, services, projects,
    tasks, deliverables, deliverable review submissions, reports, comments,
@@ -499,9 +498,9 @@ Three tiers, in decreasing order of ceremony:
      malformed on a listed endpoint ⇒ 400 `idempotency_key_required`.
    - Key is scoped `(actor_user_id, route, key)`; store is the
      `idempotency_keys` table (Phase 5 implementation migration): key columns
-     + `request_hash` (SHA-256 of the validated body) + stored `status` and
-     response envelope + `created_at`; rows expire after **24 h** (job or
-     lazy purge).
+     - `request_hash` (SHA-256 of the validated body) + stored `status` and
+       response envelope + `created_at`; rows expire after **24 h** (job or
+       lazy purge).
    - Replay semantics: same key + same `request_hash` ⇒ the **stored
      response**, re-emitted with its original status and an
      `Idempotency-Replayed: true` header; same key + different body ⇒ 409
@@ -520,7 +519,7 @@ Three tiers, in decreasing order of ceremony:
   check). Files use signed URLs ([§L](#l-files)); there is no multipart
   endpoint in v1.
 - Response headers: `x-request-id`, `Cache-Control: no-store, max-age=0,
-  must-revalidate` (route *and* edge — implemented), the security header set
+must-revalidate` (route _and_ edge — implemented), the security header set
   of Phase 1, and — deliberately — **no CORS headers at all** (ADR-0014).
   Cross-origin browser calls fail on the browser's own terms; the API never
   negotiates with them.
@@ -582,11 +581,11 @@ contract adopts them unchanged, plus a `rateLimit` class retrofit.
 
 ### A-1. `POST /api/v1/auth/login`
 
-- **AuthN/AuthZ** `public` — this endpoint *is* authentication; no
+- **AuthN/AuthZ** `public` — this endpoint _is_ authentication; no
   capability. Handler performs its own authoritative checks.
 - **Input** body `{ email: string≤320, password: string≤4096 }` strict.
 - **Output** `200` `{ user: AuthContextDTO, mfaRequired: boolean,
-  redirectTo: string }`; `redirectTo` derived server-side, never echoed from
+redirectTo: string }`; `redirectTo` derived server-side, never echoed from
   the request.
 - **Page/filter/sort** —.
 - **Errors** `401 INVALID_CREDENTIALS` uniform across unknown-address and
@@ -642,7 +641,7 @@ contract adopts them unchanged, plus a `rateLimit` class retrofit.
   enrollment completes with challenge+verify inside `enroll`'s handler pair),
   unenroll of a staff factor requires an `aal2` session.
 - **Input/Output** `enroll` `{ factorType: 'TOTP' }` → `200` `{ factorId,
-  totp: { qrCodeUri, secret } }` (secret shown once, never persisted
+totp: { qrCodeUri, secret } }` (secret shown once, never persisted
   plaintext, never returned again); `challenge` `{ code: 6-digit }` → `200`
   `{ redirectTo }` with the session upgraded to `aal2`; `factors` → `200`
   `{ factors: [{ id, factorType, enrolledAt, status }] }` (never the secret);
@@ -659,7 +658,7 @@ contract adopts them unchanged, plus a `rateLimit` class retrofit.
 ## B. Self, users and account lifecycle
 
 Backing tables: `profiles`, `organization_memberships`,
-`platform_role_grants`. The "users" resource is *people* — global rows whose
+`platform_role_grants`. The "users" resource is _people_ — global rows whose
 reach is per-tenant; the matrix cells are `user:*` (authorization §B.1).
 
 ### B-1. `GET /api/v1/me`
@@ -670,12 +669,12 @@ reach is per-tenant; the matrix cells are `user:*` (authorization §B.1).
   the profile-only shape below) · AAL 1.
 - **Input** none.
 - **Output** `200` `{ user: SelfUserDTO, memberships: MembershipSelfDTO[],
-  platformRole: 'SUPER_ADMIN' | 'ADMIN' | null }`. `SelfUserDTO` is the
+platformRole: 'SUPER_ADMIN' | 'ADMIN' | null }`. `SelfUserDTO` is the
   caller's own row in full (`id, email, fullName, displayName, jobTitle,
-  avatarPath, userType, accountStatus, mfaEnrolledAt, lastSeenAt,
-  createdAt`). Each `MembershipSelfDTO`: `{ id, organizationId,
-  organizationSlug, organizationDisplayName, role, status, isPrimaryContact,
-  joinedAt }` — the slug is included so the portal can build
+avatarPath, userType, accountStatus, mfaEnrolledAt, lastSeenAt,
+createdAt`). Each `MembershipSelfDTO`: `{ id, organizationId,
+organizationSlug, organizationDisplayName, role, status, isPrimaryContact,
+joinedAt }` — the slug is included so the portal can build
   `/portal/[orgSlug]` without a second round trip.
 - **Page/filter/sort** —.
 - **Errors** global only.
@@ -688,13 +687,13 @@ reach is per-tenant; the matrix cells are `user:*` (authorization §B.1).
 ### B-2. `PATCH /api/v1/me`
 
 - **AuthN/AuthZ** `required` · `user:update` (`● ●[R] ◦ ◦`) · SELF — caller
-  is the subject; the `[R]` on ADMIN governs *others'* accounts (status
+  is the subject; the `[R]` on ADMIN governs _others'_ accounts (status
   writes), not self display fields · AAL 1.
 - **Input** body, all optional, ≥ 1: `{ fullName?≤120, displayName?≤80,
-  jobTitle?≤120, avatarPath?≤512, timezone?≤64 }`. `avatarPath` must be a
+jobTitle?≤120, avatarPath?≤512, timezone?≤64 }`. `avatarPath` must be a
   storage path under the caller's reachable org prefix (validated; the
   avatar upload itself is the file flow of [§L](#l-files) with `fileKind:
-  AVATAR`).
+AVATAR`).
 - **Output** `200` `SelfUserDTO`.
 - **Errors** `422 empty_update` · `409` email-change attempts are not a field
   here — email is immutable from the API (authentication §10) and is not in
@@ -713,9 +712,9 @@ reach is per-tenant; the matrix cells are `user:*` (authorization §B.1).
   filter the staff roster into view) · pagination.
 - **Output** `200` list envelope of `UserSummaryDTO`. Staff audience:
   `{ id, fullName, displayName, avatarPath, jobTitle, userType, email,
-  accountStatus, lastSeenAt }`; client audience — exactly the granted
+accountStatus, lastSeenAt }`; client audience — exactly the granted
   columns plus the id (authorization §F.1): `{ id, fullName, displayName,
-  avatarPath, jobTitle }`. No `email`, no `userType`, no `lastSeenAt`, no
+avatarPath, jobTitle }`. No `email`, no `userType`, no `lastSeenAt`, no
   phone or MFA fields of other people; the client directory does not
   distinguish staff from co-members, because the grant says it must not.
 - **Page/filter/sort** keyset: default `fullName:asc` (key = lower-cased
@@ -732,18 +731,18 @@ reach is per-tenant; the matrix cells are `user:*` (authorization §B.1).
 
 - **AuthN/AuthZ** `required` · `user:read` · tenant ← **shared-org resolver**:
   staff resolve `undefined` (GLOBAL cells); a CLIENT actor resolves the first
-  organization where *both* actor and target hold live memberships — through
+  organization where _both_ actor and target hold live memberships — through
   the caller's own RLS, so invisible ⇒ `null` ⇒ 404 · AAL 1.
 - **Input** path `userId` uuid.
 - **Output** `200` `UserSummaryDTO` (audience-shaped as B-3) plus, for staff,
   `memberships: [{ organizationId, role, status }]` and the target's
   `platformRole` presence (`true`/`false` for ADMIN viewers, full value for
   SUPER_ADMIN — the roster of power is SUPER_ADMIN-only, authorization §B.1).
-- **Errors** `404` (unknown *or* not connected to the caller's tenant).
+- **Errors** `404` (unknown _or_ not connected to the caller's tenant).
 - **Validation** uuid path.
 - **Audit** none. **Idempotency** n/a; rate class `read`.
 
-### B-5…B-8. Account lifecycle — `POST /api/v1/accounts/{userId}/suspend` · `/reinstate` · `/deactivate` · `/reactivate` · *implemented, Phase 3*
+### B-5…B-8. Account lifecycle — `POST /api/v1/accounts/{userId}/suspend` · `/reinstate` · `/deactivate` · `/reactivate` · _implemented, Phase 3_
 
 - **AuthN/AuthZ** `required` · `user:update` · `subjectUser` ← path ·
   handler additionally demands a platform role (clients may only ever reach
@@ -772,7 +771,7 @@ reach is per-tenant; the matrix cells are `user:*` (authorization §B.1).
   FK, Phase 2).
 - **Errors** `403` self-erasure while signed in (RPC refuses) · `404`
   unknown user · `422` missing reason. **Implementation obligation:** the
-  current RPC does not refuse erasing the platform's *last* live
+  current RPC does not refuse erasing the platform's _last_ live
   SUPER_ADMIN; the Phase 5 service layer must check live grants before
   calling it and answer `409 last_super_admin` — recorded here so the gap is
   closed by the endpoint, not discovered by it.
@@ -785,29 +784,29 @@ reach is per-tenant; the matrix cells are `user:*` (authorization §B.1).
 
 ## C. Authorization and access management
 
-"Authorization" as an API surface = the endpoints that change *who holds what
-access*: invitations (pre-membership ledger), organization memberships,
+"Authorization" as an API surface = the endpoints that change _who holds what
+access_: invitations (pre-membership ledger), organization memberships,
 platform role grants, and internal team staffing. All writes here are
 RPC-backed or CRITICAL-audited; that is the design, not an accident
 (authorization §C).
 
-### C-1. `POST /api/v1/invitations` · *implemented, Phase 3*
+### C-1. `POST /api/v1/invitations` · _implemented, Phase 3_
 
 - **AuthN/AuthZ** `required` · `invitation:create` (`● ● ◑ ✗`) · tenant ←
   body `organizationId` for the client branch; `undefined` for the staff
   branch (GLOBAL cells answer; TENANT cells cannot) · AAL 1.
 - **Input** body `{ email, fullName?, organizationId? uuid,
-  organizationRole? 'CLIENT_MEMBER', platformRole? 'SUPER_ADMIN'|'ADMIN',
-  message?≤500 }` strict — exactly one branch (XOR refine mirroring the
+organizationRole? 'CLIENT_MEMBER', platformRole? 'SUPER_ADMIN'|'ADMIN',
+message?≤500 }` strict — exactly one branch (XOR refine mirroring the
   `invitations_exactly_one_branch` CHECK). **CLIENT_ADMIN callers may only
   ever send the `CLIENT_MEMBER` branch** — anything else is 422
   `role_ceiling` before the RPC could see it.
 - **Output** `201` `InvitationDTO` `{ id, email, organizationId | null,
-  organizationRole | null, platformRole | null, status: 'PENDING',
-  invitedBy, expiresAt, resentCount, lastSentAt, createdAt }` + `Location`.
+organizationRole | null, platformRole | null, status: 'PENDING',
+invitedBy, expiresAt, resentCount, lastSentAt, createdAt }` + `Location`.
   Never the token, never `token_hash` (not granted at GRANT level).
 - **Errors** `409` confirmed person already exists (routed to status flows) ·
-  re-issue of an unconfirmed address is *not* a conflict — it updates the
+  re-issue of an unconfirmed address is _not_ a conflict — it updates the
   pending row and returns it (implemented behaviour).
 - **Audit** `INVITE_SENT` — NOTICE (client) / CRITICAL (staff branch).
 - **Idempotency** tier 2 (unique pending index answers blind retries).
@@ -818,7 +817,7 @@ RPC-backed or CRITICAL-audited; that is the design, not an accident
   `organizationId` query — mandatory for CLIENT_ADMIN (422 if absent),
   optional for staff · AAL 1.
 - **Input** query: `organizationId? uuid` · `status? csv(PENDING|ACCEPTED|
-  EXPIRED|REVOKED)` · pagination.
+EXPIRED|REVOKED)` · pagination.
 - **Output** `200` list envelope of `InvitationDTO` (as C-1, minus
   `message`? — no: `message` is included, it is the inviter's note; the
   token hash is the only withheld field).
@@ -834,7 +833,7 @@ RPC-backed or CRITICAL-audited; that is the design, not an accident
 - **Input** path uuid. **Output** `200` `InvitationDTO`.
 - **Errors** `404`. **Audit** none. Rate class `read`.
 
-### C-4. `POST /api/v1/invitations/{invitationId}/resend` · *implemented*
+### C-4. `POST /api/v1/invitations/{invitationId}/resend` · _implemented_
 
 - **AuthN/AuthZ** `required` · `invitation:update` (`● ● ◑ ✗`) · tenant ←
   row · AAL 1. **Input** none. **Output** `200` updated `InvitationDTO`
@@ -842,7 +841,7 @@ RPC-backed or CRITICAL-audited; that is the design, not an accident
 - **Errors** `409 invitation_state` unless `PENDING` (accepted/revoked/expired
   rows refuse). **Audit** `INVITE_SENT` (as C-1). Idempotency tier 1.
 
-### C-5. `POST /api/v1/invitations/{invitationId}/revoke` · *implemented*
+### C-5. `POST /api/v1/invitations/{invitationId}/revoke` · _implemented_
 
 - **AuthN/AuthZ** `required` · `invitation:update` · tenant ← row · AAL 1.
 - **Input** none. **Output** `200` `InvitationDTO` with `status: 'REVOKED'`.
@@ -856,10 +855,10 @@ RPC-backed or CRITICAL-audited; that is the design, not an accident
 - **AuthN/AuthZ** `required` · `membership:read` (`● ● ◑ ◑`) · tenant ←
   path · AAL 1.
 - **Input** path org uuid; query: `status? csv(INVITED|ACTIVE|SUSPENDED|
-  DEACTIVATED)` · `role? csv(CLIENT_ADMIN|CLIENT_MEMBER)` · pagination.
+DEACTIVATED)` · `role? csv(CLIENT_ADMIN|CLIENT_MEMBER)` · pagination.
 - **Output** `200` list envelope of `MemberDTO` `{ id (membership id),
-  userId, fullName, displayName, avatarPath, jobTitle, role, status,
-  isPrimaryContact, invitedBy, joinedAt }` — name fields resolved from
+userId, fullName, displayName, avatarPath, jobTitle, role, status,
+isPrimaryContact, invitedBy, joinedAt }` — name fields resolved from
   `profiles` via the same column-restricted join the directory uses.
 - **Page/filter/sort** default `createdAt:asc` (join order = roster order).
 - **Errors** `404` org unreachable. **Audit** none. Rate class `read`.
@@ -871,16 +870,16 @@ RPC-backed or CRITICAL-audited; that is the design, not an accident
   decomposed `membership:create` is what the RPC and RLS see · tenant ←
   path · AAL 1.
 - **Input** body `{ userId: uuid, role: 'CLIENT_MEMBER' | 'CLIENT_ADMIN',
-  jobTitle?≤120 }` strict — maps 1:1 to
+jobTitle?≤120 }` strict — maps 1:1 to
   `add_organization_member(p_organization_id, p_user_id, p_role,
-  p_job_title)`. New *people* arrive through invitations (C-1); this
+p_job_title)`. New _people_ arrive through invitations (C-1); this
   endpoint adds an **existing user** to a tenant.
 - **Output** `201` `MemberDTO` + `Location`.
 - **Errors** `404` org/target unreachable · `409` live membership exists ·
   `409 role_ceiling` — a CLIENT_ADMIN caller sending `CLIENT_ADMIN` is
   refused by the RPC (and pre-refused at validation) · `409 self_addition`
   — the RPC refuses to add the caller to their own tenant · `409
-  not_a_client_profile` — the target must be a live CLIENT profile (staff
+not_a_client_profile` — the target must be a live CLIENT profile (staff
   join teams, not organizations).
 - **Validation** role enum; target `userType` must be CLIENT (RPC-enforced;
   `enforce_membership_user_type` is the last wall).
@@ -894,14 +893,14 @@ RPC-backed or CRITICAL-audited; that is the design, not an accident
 - **AuthN/AuthZ** `required` · `organization:manage_members` · tenant ←
   path · AAL 1.
 - **Input** body, ≥ 1: `{ role?, status?, isPrimaryContact?,
-  newPrimaryMembershipId?, jobTitle? }` — maps to
+newPrimaryMembershipId?, jobTitle? }` — maps to
   `update_organization_member(p_membership_id, …)`.
 - **Output** `200` updated `MemberDTO`.
 - **Errors** `409 last_admin` (removing/demoting the last live
   CLIENT_ADMIN) · `409 primary_contact_replacement_required` ·
   `409 self_modification` (a CLIENT_ADMIN editing their own membership row)
   · `409 invalid_transition` for membership status moves the RPC refuses ·
-  `409 role_ceiling` (CLIENT_ADMIN may only ever *set* CLIENT_MEMBER).
+  `409 role_ceiling` (CLIENT_ADMIN may only ever _set_ CLIENT_MEMBER).
 - **Audit** `UPDATE` · organization_membership · CRITICAL (cross-org edge).
 - **Idempotency** naturally. Rate class `sensitive`.
 
@@ -912,7 +911,7 @@ RPC-backed or CRITICAL-audited; that is the design, not an accident
 - **Input** query `newPrimaryMembershipId? uuid` (required when removing the
   primary contact) + `reason?≤500` body — maps to
   `remove_organization_member(p_membership_id, p_new_primary_membership_id,
-  p_reason)`.
+p_reason)`.
 - **Output** `204`.
 - **Errors** `409 last_admin` · `409 primary_contact_replacement_required` ·
   `409 self_modification` · `404` membership invisible.
@@ -929,8 +928,8 @@ RPC-backed or CRITICAL-audited; that is the design, not an accident
 - **Input** query: `userId? uuid` (SUPER_ADMIN only; 422 for ADMIN — they
   cannot probe others) · `includeRevoked? boolean` · pagination.
 - **Output** `200` list envelope of `PlatformGrantDTO` `{ id, userId,
-  fullName, role, grantedBy, grantedAt, expiresAt, revokedAt, revokedBy,
-  revokeReason }`.
+fullName, role, grantedBy, grantedAt, expiresAt, revokedAt, revokedBy,
+revokeReason }`.
 - **Page/filter/sort** default `grantedAt:desc`.
 - **Audit** none. Rate class `read`.
 
@@ -939,7 +938,7 @@ RPC-backed or CRITICAL-audited; that is the design, not an accident
 - **AuthN/AuthZ** `required` · `platform_grant:create` (`●[R] ✗ ✗ ✗`) ·
   SUPER_ADMIN by cell · **`minAal: 2`** · no tenant.
 - **Input** body `{ userId: uuid, role: 'SUPER_ADMIN'|'ADMIN', reason:
-  string≤500, expiresAt?: timestamp }` strict — maps to
+string≤500, expiresAt?: timestamp }` strict — maps to
   `grant_platform_role(p_user_id, p_role, p_reason, p_expires_at)`. Both
   platform roles are grantable here; granting `SUPER_ADMIN` is the single
   most powerful operation in the API and is treated accordingly — mandatory
@@ -959,7 +958,7 @@ RPC-backed or CRITICAL-audited; that is the design, not an accident
 - **AuthN/AuthZ** `required` · `platform_grant:delete` (`●[R] ✗ ✗ ✗`) ·
   **`minAal: 2`**.
 - **Input** body `{ reason: string≤500 }` — maps to
-  `revoke_platform_role(p_user_id, p_reason)`; the grant row is *updated*
+  `revoke_platform_role(p_user_id, p_reason)`; the grant row is _updated_
   (`revoked_at`), never deleted.
 - **Output** `204`. Effect is immediate at the next `auth_context()`
   resolution (ADR-0011: no token rewrite needed or possible).
@@ -983,7 +982,7 @@ RPC-backed or CRITICAL-audited; that is the design, not an accident
 - **Input** path `team` — an enum label (`SEO`, `PAID_MEDIA`, …), validated
   against the `team` enum (422 otherwise).
 - **Output** `200` list envelope of `TeamMembershipDTO` `{ id, userId,
-  fullName, avatarPath, team, isLead, allocationPct, createdAt }`.
+fullName, avatarPath, team, isLead, allocationPct, createdAt }`.
 - **Page/filter/sort** default `createdAt:asc`; filter `isLead? boolean`.
 - **Audit** none. Rate class `read`.
 
@@ -991,7 +990,7 @@ RPC-backed or CRITICAL-audited; that is the design, not an accident
 
 - **AuthN/AuthZ** `required` · `team_membership:create` (`● ● ✗ ✗`) · AAL 1.
 - **Input** body `{ userId: uuid, team: TeamEnum, isLead?: boolean,
-  allocationPct?: int 0–100 }` strict.
+allocationPct?: int 0–100 }` strict.
 - **Output** `201` `TeamMembershipDTO` + `Location`.
 - **Errors** `409` duplicate live membership (user×team) · `404` target user
   not INTERNAL (RPC-free check: the service loads the profile through RLS;
@@ -1023,15 +1022,15 @@ every rule about `organization_id` derivation exists because of this resource.
 ### D-1. `POST /api/v1/organizations`
 
 - **AuthN/AuthZ** `required` · `organization:create` (`● ● ✗ ✗`) · no
-  tenant (this *is* a tenant being born) · AAL 1.
+  tenant (this _is_ a tenant being born) · AAL 1.
 - **Input** body `{ slug: slug≤64, displayName≤120, legalName?≤200,
-  region: 'NYC'|'LDN'|'SYD'|'DIFC', industry?≤80, websiteUrl?≤2048,
-  status?: org_status default 'PROSPECT', primaryCurrency?: currency_code,
-  accountManagerUserId?: uuid }` strict, with an `Idempotency-Key`.
+region: 'NYC'|'LDN'|'SYD'|'DIFC', industry?≤80, websiteUrl?≤2048,
+status?: org_status default 'PROSPECT', primaryCurrency?: currency_code,
+accountManagerUserId?: uuid }` strict, with an `Idempotency-Key`.
 - **Output** `201` `OrganizationDTO` `{ id, slug, displayName, legalName,
-  region, industry, websiteUrl, status, primaryCurrency,
-  accountManagerUserId, onboardedAt, churnedAt, organizationId (=== id),
-  createdAt }` + `Location`. The settings row is trigger-created
+region, industry, websiteUrl, status, primaryCurrency,
+accountManagerUserId, onboardedAt, churnedAt, organizationId (=== id),
+createdAt }` + `Location`. The settings row is trigger-created
   (`create_organization_settings`) with defaults and readable via D-7.
 - **Errors** `409 duplicate_code` slug collision (partial unique index —
   reusable after soft delete).
@@ -1071,7 +1070,7 @@ every rule about `organization_id` derivation exists because of this resource.
   name, region and status are contractual facts; clients cannot edit them ·
   tenant ← path · AAL 1.
 - **Input** body ≥ 1: `{ displayName?, legalName?, region?, industry?,
-  websiteUrl?, primaryCurrency? }`. **Status changes are NOT PATCH fields** —
+websiteUrl?, primaryCurrency? }`. **Status changes are NOT PATCH fields** —
   `POST …/status` below — and **`accountManagerUserId` is not either**: it is
   the ASSIGN verb (D-9), which has its own capability cell.
 - **Output** `200` `OrganizationDTO`.
@@ -1084,13 +1083,13 @@ every rule about `organization_id` derivation exists because of this resource.
 
 - STATUS-TRANSITION-shaped action — **with one declared difference:** Phase 2
   seeded `status_transitions` for exactly five entity kinds (engagement,
-  service, project, deliverable, task) and its validator *rejects* any other
+  service, project, deliverable, task) and its validator _rejects_ any other
   (`status_transitions: organization has no status machine`). Organizations
   therefore have an **application-level graph**, defined as data in the
   Phase 5 state-machine module: `PROSPECT → ONBOARDING → ACTIVE ⇄ PAUSED`,
   `ACTIVE|PAUSED → CHURNED → ARCHIVED`. Capability `organization:update` ·
   tenant ← path.
-- **Input** `{ status, reason?≤500 }` — `reason` is *required* for
+- **Input** `{ status, reason?≤500 }` — `reason` is _required_ for
   `→ CHURNED` and `→ ARCHIVED` (422 otherwise). `churnedAt`/`onboardedAt`
   stamping is the service layer honouring the transition; the
   `CHURNED ⇒ churned_at` CHECK is the database's backstop.
@@ -1112,26 +1111,26 @@ every rule about `organization_id` derivation exists because of this resource.
 - **Input** body `{ reason: string≤500, confirmSlug: string }` — `confirmSlug`
   must equal the organization's slug, purge-style confirmation.
 - **Execution** through the definer RPC `archive_organization(
-  p_organization_id, p_reason, p_confirm_slug)` — **the one new RPC Phase 5
+p_organization_id, p_reason, p_confirm_slug)` — **the one new RPC Phase 5
   adds to the closed set** ([ADR-0029](adr/ADR-0029-archive-organization-definer-rpc.md),
   Proposed): it audits first (`HARD_DELETE`-adjacent CRITICAL row), sets
   `deleted_at/deleted_by`, cascades the soft delete to live memberships, and
   refuses organizations holding live engagements (409 `has_active_children`).
 - **Output** `204`. **Errors** `404` · `409 has_active_children` · `409
-  confirm_slug_mismatch`.
+confirm_slug_mismatch`.
 - **Audit** `SOFT_DELETE` · organization · CRITICAL (inside the RPC).
 - **Idempotency** tier 1; rate class `sensitive`.
 
 ### D-7. `GET /api/v1/organizations/{organizationId}/settings`
 
-- **AuthN/AuthZ** `required` · `organization:read` — *reading* settings is a
+- **AuthN/AuthZ** `required` · `organization:read` — _reading_ settings is a
   read of the tenant row's companion, not a settings change (the `manage_`
   capability is reserved for the write; both CLIENT roles may read their
   own settings, authorization §G) · tenant ← path · AAL 1.
 - **Output** `200` `OrganizationSettingsDTO` `{ organizationId,
-  brandPrimaryColor, logoFileId, defaultReportCadence,
-  notifyOnDeliverableReady, notifyOnReportPublished,
-  requireApprovalForPublish, timezone, updatedAt }`.
+brandPrimaryColor, logoFileId, defaultReportCadence,
+notifyOnDeliverableReady, notifyOnReportPublished,
+requireApprovalForPublish, timezone, updatedAt }`.
 - **Errors** `404`. **Audit** none. Rate class `read`.
 
 ### D-8. `PUT /api/v1/organizations/{organizationId}/settings`
@@ -1165,7 +1164,7 @@ every rule about `organization_id` derivation exists because of this resource.
 ## E. Clients
 
 **There is no `clients` resource, and there is deliberately no client API.**
-In the Growlith domain a *client* is an organization — the tenant root —
+In the Growlith domain a _client_ is an organization — the tenant root —
 viewed by people whose roles (`CLIENT_ADMIN`, `CLIENT_MEMBER`) are scoped to
 it. Inventing a `/api/v1/clients` surface would create a second copy of the
 authorization model in URL form, and the second copy is always the one that
@@ -1177,7 +1176,7 @@ satisfied by stating, precisely, how CLIENT actors experience the catalogue:
    is no client-facing organization list endpoint — `GET /organizations`
    answers them 403 by matrix.
 2. **Reads.** Every `◑`/`◒` list and detail endpoint in this catalogue is
-   callable by client actors *with their own `organizationId`*; the matrix,
+   callable by client actors _with their own `organizationId`_; the matrix,
    the column grants and RLS narrow the result: engagements minus money,
    services minus fees, visible projects, strictly-gated deliverables,
    published reports, clean visible files, non-internal comments on visible
@@ -1199,7 +1198,7 @@ satisfied by stating, precisely, how CLIENT actors experience the catalogue:
 5. **Activity** is the projected feed (O-2), never the audit table.
 
 Phase 9's portal is a consumer of exactly this section; no endpoint exists
-*for* the portal that the admin surface does not also use.
+_for_ the portal that the admin surface does not also use.
 
 ---
 
@@ -1213,14 +1212,14 @@ Backing table: `engagements` (21 columns; `contract_value`,
 - **AuthN/AuthZ** `required` · `engagement:create` (`● ● ✗ ✗`) · tenant ←
   path · AAL 1.
 - **Input** body `{ code: bounded 2–32 (unique per org), name≤120,
-  engagementType: 'RETAINER'|'PROJECT'|'ADVISORY', currency: currency_code,
-  contractValue?: money, monthlyRetainer?: money, startDate: date,
-  endDate?: date, renewalDate?: date, accountManagerUserId?: uuid,
-  notesInternal?≤4000 }` strict + `Idempotency-Key`.
+engagementType: 'RETAINER'|'PROJECT'|'ADVISORY', currency: currency_code,
+contractValue?: money, monthlyRetainer?: money, startDate: date,
+endDate?: date, renewalDate?: date, accountManagerUserId?: uuid,
+notesInternal?≤4000 }` strict + `Idempotency-Key`.
 - **Output** `201` `EngagementDTO` + `Location`. Staff shape: `{ id,
-  organizationId, code, name, engagementType, status, currency,
-  contractValue, monthlyRetainer, startDate, endDate, renewalDate,
-  accountManagerUserId, signedAt, notesInternal, createdAt, updatedAt }`;
+organizationId, code, name, engagementType, status, currency,
+contractValue, monthlyRetainer, startDate, endDate, renewalDate,
+accountManagerUserId, signedAt, notesInternal, createdAt, updatedAt }`;
   client shape drops exactly the three column-restricted fields —
   `contractValue`, `monthlyRetainer`, `notesInternal` — not by filtering
   the response but by the client mapper accepting only the
@@ -1228,7 +1227,7 @@ Backing table: `engagements` (21 columns; `contract_value`,
 - **Errors** `409 duplicate_code` · `404` org unreachable.
 - **Validation** period order (`startDate ≤ endDate`, renewal ≥ start);
   money via `moneyField`; `monthlyRetainer` implies `engagementType =
-  RETAINER` (refine, mirroring the DB CHECK); account manager must be
+RETAINER` (refine, mirroring the DB CHECK); account manager must be
   INTERNAL.
 - **Audit** `CREATE` · engagement · NOTICE.
 - **Idempotency** tier 3 — key **required**. Rate class `mutation`.
@@ -1257,8 +1256,8 @@ Backing table: `engagements` (21 columns; `contract_value`,
   but **PATCH never carries `status`**; this pattern's contract is that
   mutable fields and transitions are separate surfaces.
 - **Input** body ≥ 1: `{ name?, currency?, contractValue?, monthlyRetainer?,
-  startDate?, endDate?, renewalDate?, accountManagerUserId?,
-  notesInternal? }`.
+startDate?, endDate?, renewalDate?, accountManagerUserId?,
+notesInternal? }`.
 - **Output** `200` updated `EngagementDTO` (staff shape only — clients hold
   no `update` cell, so no client mapper is reachable here).
 - **Errors** `409` constraint conflicts (period order, retainer/type CHECK,
@@ -1271,7 +1270,7 @@ Backing table: `engagements` (21 columns; `contract_value`,
 ### F-5. `POST /api/v1/engagements/{engagementId}/status`
 
 - STATUS-TRANSITION over `engagement_status` (`DRAFT → PENDING_SIGNATURE →
-  ACTIVE ⇄ PAUSED → COMPLETED | CANCELLED`; the reopening transitions
+ACTIVE ⇄ PAUSED → COMPLETED | CANCELLED`; the reopening transitions
   `ACTIVE|PAUSED → CANCELLED` seeded SUPER_ADMIN-only are honoured via
   `allowed_roles`). Capability `engagement:update` `[S]` · tenant ← row.
 - **Input** `{ status, reason?≤500 }`; `signedAt` is stamped by the service
@@ -1299,7 +1298,7 @@ Backing table: `engagements` (21 columns; `contract_value`,
 ## G. Services
 
 Backing table: `services` (`fee`, `fee_model` column-restricted). A service
-is a *purchased instance* of a service line under an engagement (ADR-0006);
+is a _purchased instance_ of a service line under an engagement (ADR-0006);
 the catalogue itself (`service_lines`) is seeded reference data compiled into
 `src/lib/domain` — it has no write surface in v1.
 
@@ -1308,15 +1307,15 @@ the catalogue itself (`service_lines`) is seeded reference data compiled into
 - **AuthN/AuthZ** `required` · `service:create` (`● ● ✗ ✗`) · tenant ←
   parent engagement row (loaded through the caller's RLS) · AAL 1.
 - **Input** body `{ serviceLine: service_line enum, name≤120,
-  scopeSummary?≤2000, currency?: currency_code (defaults to the
-  engagement's), fee?: money, feeModel?: 'RETAINER'|'FIXED'|'HOURLY'|
-  'PERFORMANCE', startDate?: date, endDate?: date, deliveringTeam?: team
-  enum (defaults via `SERVICE_LINE_DEFAULT_TEAM`), leadUserId?: uuid }`
+scopeSummary?≤2000, currency?: currency_code (defaults to the
+engagement's), fee?: money, feeModel?: 'RETAINER'|'FIXED'|'HOURLY'|
+'PERFORMANCE', startDate?: date, endDate?: date, deliveringTeam?: team
+enum (defaults via `SERVICE_LINE_DEFAULT_TEAM`), leadUserId?: uuid }`
   strict + `Idempotency-Key`.
 - **Output** `201` `ServiceDTO` `{ id, organizationId, engagementId,
-  serviceLine, serviceLineLabel, deliveringTeam, name, scopeSummary, status,
-  currency, fee?, feeModel?, startDate, endDate, leadUserId, createdAt,
-  updatedAt }` + `Location`. Client shape drops `fee`/`feeModel` (grants).
+serviceLine, serviceLineLabel, deliveringTeam, name, scopeSummary, status,
+currency, fee?, feeModel?, startDate, endDate, leadUserId, createdAt,
+updatedAt }` + `Location`. Client shape drops `fee`/`feeModel` (grants).
 - **Errors** `404` engagement unreachable · `409` currency disagreement with
   the engagement (mapped from `enforce_service_currency`).
 - **Audit** `CREATE` · service · NOTICE. **Idempotency** tier 3 — key
@@ -1328,26 +1327,27 @@ the catalogue itself (`service_lines`) is seeded reference data compiled into
   `organizationId` query (mandatory for CLIENT actors) · AAL 1.
 - **Input** query: `organizationId? uuid` · `engagementId? uuid` ·
   `serviceLine? csv` · `status? csv(service_status)` · `deliveringTeam?
-  csv(team)` · pagination.
+csv(team)` · pagination.
 - **Output** `200` list envelope of audience-shaped `ServiceDTO`.
 - **Page/filter/sort** default `createdAt:desc`, alternate `startDate:desc`.
 - **Audit** none. Rate class `read`.
 
 ### G-3. `GET /api/v1/services/{serviceId}` · tenant ← row · `200`
+
 audience-shaped `ServiceDTO`. `404` otherwise. Rate class `read`.
 
 ### G-4. `PATCH /api/v1/services/{serviceId}`
 
 - Capability `service:update` (`●[S] ●[S] ✗ ✗`) · tenant ← row · body ≥ 1:
   `{ name?, scopeSummary?, currency?, fee?, feeModel?, startDate?, endDate?,
-  deliveringTeam?, leadUserId? }` · **Output** `200` `ServiceDTO` (staff).
+deliveringTeam?, leadUserId? }` · **Output** `200` `ServiceDTO` (staff).
 - **Errors** `409` team/status CHECKs (`enforce_active_team`), currency vs.
   engagement · **Audit** `UPDATE` · NOTICE · **Idempotency** natural.
 
 ### G-5. `POST /api/v1/services/{serviceId}/status`
 
 - STATUS-TRANSITION over `service_status` (`PLANNED → ACTIVE ⇄ PAUSED →
-  COMPLETED | CANCELLED`; `COMPLETED → ACTIVE` is the seeded
+COMPLETED | CANCELLED`; `COMPLETED → ACTIVE` is the seeded
   SUPER_ADMIN-only reopening). Capability `service:update` `[S]`.
 - **Audit** `STATUS_CHANGE` · INFO. Idempotency tier 1. Rate class
   `mutation`.
@@ -1360,7 +1360,7 @@ audience-shaped `ServiceDTO`. `404` otherwise. Rate class `read`.
 ### G-7. `POST /api/v1/services/{serviceId}/assign`
 
 - ASSIGN · capability `service:assign` (`● ● ✗ ✗`) · body `{
-  deliveringTeam?: team, leadUserId?: uuid }` ≥ 1 · **Output** `200`
+deliveringTeam?: team, leadUserId?: uuid }` ≥ 1 · **Output** `200`
   `ServiceDTO` · **Audit** `UPDATE` · INFO. Rate class `mutation`.
 
 ---
@@ -1376,15 +1376,15 @@ the strict one, not this (authorization §E).
 - **AuthN/AuthZ** `required` · `project:create` (`● ● ✗ ✗`) · tenant ←
   parent service row · AAL 1.
 - **Input** body `{ code: bounded 2–32 (unique per org), name≤120,
-  description?≤4000, priority?: 'LOW'|'MEDIUM'|'HIGH'|'URGENT' default
-  'MEDIUM', leadUserId?: uuid, owningTeam?: team (defaults from the
-  service's delivering team), startDate?: date, targetDate?: date,
-  clientVisible?: boolean default true }` strict + `Idempotency-Key`.
+description?≤4000, priority?: 'LOW'|'MEDIUM'|'HIGH'|'URGENT' default
+'MEDIUM', leadUserId?: uuid, owningTeam?: team (defaults from the
+service's delivering team), startDate?: date, targetDate?: date,
+clientVisible?: boolean default true }` strict + `Idempotency-Key`.
   `status` is not an input — projects are born `PLANNED`.
 - **Output** `201` `ProjectDTO` `{ id, organizationId, serviceId, code,
-  name, description, status, priority, health, leadUserId, owningTeam,
-  startDate, targetDate, completedAt, clientVisible, createdAt, updatedAt }`
-  + `Location`.
+name, description, status, priority, health, leadUserId, owningTeam,
+startDate, targetDate, completedAt, clientVisible, createdAt, updatedAt }`
+  - `Location`.
 - **Errors** `409 duplicate_code` · `404` service unreachable.
 - **Audit** `CREATE` · project · NOTICE. **Idempotency** tier 3 — key
   **required**. Rate class `mutation`.
@@ -1395,8 +1395,8 @@ the strict one, not this (authorization §E).
   `organizationId` query (mandatory for CLIENT actors) · AAL 1 · the
   `CLIENT_VISIBLE` obligation is recorded; RLS applies the gate regardless.
 - **Input** query: `organizationId? uuid` · `serviceId? uuid` · `status?
-  csv(project_status)` · `priority? csv` · `health? csv(ON_TRACK|AT_RISK|
-  OFF_TRACK)` · `leadUserId? uuid` · `owningTeam? csv(team)` · pagination.
+csv(project_status)` · `priority? csv` · `health? csv(ON_TRACK|AT_RISK|
+OFF_TRACK)` · `leadUserId? uuid` · `owningTeam? csv(team)` · pagination.
 - **Output** `200` list envelope of `ProjectDTO` — clients see only rows
   with `client_visible = true` (RLS), and never see a flag they could flip:
   `clientVisible` itself is included in the DTO only for staff.
@@ -1405,6 +1405,7 @@ the strict one, not this (authorization §E).
 - **Errors** global. **Audit** none. Rate class `read`.
 
 ### H-3. `GET /api/v1/projects/{projectId}` · tenant ← row · capability
+
 `project:read` · `200` `ProjectDTO` (404 for invisible-or-missing — the
 client gate and the miss are one answer). Rate class `read`.
 
@@ -1412,7 +1413,7 @@ client gate and the miss are one answer). Rate class `read`.
 
 - Capability `project:update` (`●[S] ●[S] ✗ ✗`) · tenant ← row · body ≥ 1:
   `{ name?, description?, priority?, health?, owningTeam?, startDate?,
-  targetDate?, clientVisible? }`. Flipping `clientVisible` to false on a
+targetDate?, clientVisible? }`. Flipping `clientVisible` to false on a
   project with client-visible deliverables is allowed — the deliverable gate
   is per-deliverable — and is audited loudly (NOTICE with the flag in the
   diff). **Output** `200` staff `ProjectDTO`. **Audit** `UPDATE` · NOTICE.
@@ -1421,7 +1422,7 @@ client gate and the miss are one answer). Rate class `read`.
 ### H-5. `POST /api/v1/projects/{projectId}/status`
 
 - STATUS-TRANSITION over `project_status` (`PLANNED → IN_PROGRESS ⇄ BLOCKED
-  → IN_REVIEW → COMPLETED | CANCELLED`; `COMPLETED → IN_PROGRESS` is the
+→ IN_REVIEW → COMPLETED | CANCELLED`; `COMPLETED → IN_PROGRESS` is the
   seeded SUPER_ADMIN-only reopening). Capability `project:update` `[S]`.
   `completedAt` is stamped on `→ COMPLETED` by the service.
 - **Audit** `STATUS_CHANGE` · INFO. Idempotency tier 1. Rate class
@@ -1437,7 +1438,7 @@ client gate and the miss are one answer). Rate class `read`.
 
 - ASSIGN · capability `project:assign` (`●[P] ●[P] ✗ ✗`) · `project`
   resolver set so the guard carries the `[P]` obligation · body `{
-  leadUserId?: uuid, owningTeam?: team }` ≥ 1. **The assignee for
+leadUserId?: uuid, owningTeam?: team }` ≥ 1. **The assignee for
   `leadUserId` must hold a `LEAD` membership on this project** — object
   rule enforced by the service (and RPC-free: the membership row is checked
   through the caller's RLS; the tenancy trigger remains the wall). Setting
@@ -1450,7 +1451,7 @@ client gate and the miss are one answer). Rate class `read`.
 - **AuthN/AuthZ** `required` · `project_membership:read`
   (`● ● ◒[C] ◒[C]`) · tenant ← parent project row · AAL 1.
 - **Output** `200` list envelope of `ProjectMemberDTO` `{ id, userId,
-  fullName, avatarPath, projectRole, addedBy, createdAt }` — clients see the
+fullName, avatarPath, projectRole, addedBy, createdAt }` — clients see the
   roster of visible projects, **never `allocationPct`** (column-restricted,
   authorization §F.1).
 - **Page/filter/sort** default `createdAt:asc`; filter `projectRole? csv`.
@@ -1464,13 +1465,13 @@ client gate and the miss are one answer). Rate class `read`.
   `projectRoles`), SUPER_ADMIN overrides · `project` resolver set · tenant ←
   parent row · AAL 1.
 - **Input** body `{ userId: uuid, projectRole: 'LEAD'|'CONTRIBUTOR'|
-  'REVIEWER'|'OBSERVER', allocationPct?: int 0–100 }` strict +
+'REVIEWER'|'OBSERVER', allocationPct?: int 0–100 }` strict +
   `Idempotency-Key`.
 - **Output** `201` `ProjectMemberDTO` (staff shape incl. `allocationPct`) +
   `Location`.
 - **Errors** `409` one-live-membership per user×project (and therefore one
   LEAD, partial index) · `404` target user shares no tenant with the project
-  (the tenancy trigger's answer, mapped) — client users *may* hold
+  (the tenancy trigger's answer, mapped) — client users _may_ hold
   OBSERVER/REVIEWER seats (authorization §5 rule 5: notification targeting,
   no extra read).
 - **Audit** `CREATE` · project_membership · NOTICE. **Idempotency** tier 2
@@ -1478,6 +1479,7 @@ client gate and the miss are one answer). Rate class `read`.
   class `mutation`.
 
 ### H-10. `PATCH /api/v1/projects/{projectId}/members/{membershipId}` ·
+
 `DELETE /api/v1/projects/{projectId}/members/{membershipId}`
 
 - Capability `project:manage_members` (`● ●[P] ✗ ✗`) for both writes — the
@@ -1485,7 +1487,7 @@ client gate and the miss are one answer). Rate class `read`.
   `project_membership:update/delete` matrix cells are what RLS evaluates,
   and the `[P]` actor-side rule (ADMIN needs `LEAD`) applies exactly as in
   H-9 · `project` resolver set · tenant ← parent row. PATCH body ≥ 1: `{
-  projectRole?, allocationPct? }` (role change to LEAD is 409 if a LEAD
+projectRole?, allocationPct? }` (role change to LEAD is 409 if a LEAD
   exists). DELETE → `204`. **Output** `200` `ProjectMemberDTO` / `204`.
 - **Audit** `UPDATE` / `SOFT_DELETE` · project_membership · NOTICE.
   Idempotency natural / tier 1. Rate class `mutation`.
@@ -1504,14 +1506,14 @@ authorization §F.3).
 - **AuthN/AuthZ** `required` · `task:create` (`● ● ✗ ✗`) · tenant ← parent
   project row · AAL 1.
 - **Input** body `{ title≤200, description?≤4000, deliverableId?: uuid,
-  priority?: priority default 'MEDIUM', assigneeUserId?: uuid,
-  assignedTeam?: team, dueDate?: date, estimatedHours?: numeric 0–10000,
-  position?: int }` strict + `Idempotency-Key`. Status is not an input —
+priority?: priority default 'MEDIUM', assigneeUserId?: uuid,
+assignedTeam?: team, dueDate?: date, estimatedHours?: numeric 0–10000,
+position?: int }` strict + `Idempotency-Key`. Status is not an input —
   tasks are born `TODO`.
 - **Output** `201` `TaskDTO` `{ id, organizationId, projectId,
-  deliverableId, title, description, status, priority, assigneeUserId,
-  assignedTeam, dueDate, startedAt, completedAt, estimatedHours,
-  actualHours, blockedReason, position, createdAt, updatedAt }` +
+deliverableId, title, description, status, priority, assigneeUserId,
+assignedTeam, dueDate, startedAt, completedAt, estimatedHours,
+actualHours, blockedReason, position, createdAt, updatedAt }` +
   `Location`.
 - **Errors** `404` project unreachable · `409` deliverable belongs to a
   different project (`enforce_task_deliverable_project`, mapped).
@@ -1529,7 +1531,7 @@ authorization §F.3).
   for cross-tenant workload views) · AAL 1.
 - **Input** query: `organizationId? uuid` · `projectId? uuid` ·
   `deliverableId? uuid` · `status? csv(task_status)` · `assigneeUserId?
-  uuid` · `assignedTeam? csv(team)` · `dueFrom?/dueTo? date` · pagination.
+uuid` · `assignedTeam? csv(team)` · `dueFrom?/dueTo? date` · pagination.
 - **Output** `200` list envelope of `TaskDTO`.
 - **Page/filter/sort** default `createdAt:desc`, alternates `dueDate:asc`
   (the "due this week" admin view of authorization §C.2), `priority:desc`
@@ -1537,13 +1539,14 @@ authorization §F.3).
 - **Audit** none. Rate class `read`.
 
 ### I-3. `GET /api/v1/tasks/{taskId}` · tenant ← row · `200` `TaskDTO` ·
+
 `404` otherwise. Rate class `read`.
 
 ### I-4. `PATCH /api/v1/tasks/{taskId}`
 
 - Capability `task:update` (`●[S] ●[S] ✗ ✗`) · tenant ← row · body ≥ 1:
   `{ title?, description?, deliverableId?, priority?, assignedTeam?,
-  dueDate?, estimatedHours?, actualHours?, blockedReason?, position? }`.
+dueDate?, estimatedHours?, actualHours?, blockedReason?, position? }`.
   `status` and `assigneeUserId` are deliberately not PATCH fields —
   transitions and assignments are I-5/I-6, each with its own capability and
   object rules.
@@ -1554,9 +1557,9 @@ authorization §F.3).
 ### I-5. `POST /api/v1/tasks/{taskId}/status`
 
 - STATUS-TRANSITION over `task_status` (`TODO → IN_PROGRESS ⇄ BLOCKED →
-  IN_REVIEW → DONE | CANCELLED`). Capability `task:update` `[S]`.
+IN_REVIEW → DONE | CANCELLED`). Capability `task:update` `[S]`.
   `startedAt`/`completedAt` stamped by the service on the corresponding
-  transitions; `blockedReason` is *required* in the body for `→ BLOCKED`
+  transitions; `blockedReason` is _required_ in the body for `→ BLOCKED`
   (422 otherwise) and cleared on exit.
 - **Audit** `STATUS_CHANGE` · INFO. Idempotency tier 1. Rate class
   `mutation`.
@@ -1565,7 +1568,7 @@ authorization §F.3).
 
 - ASSIGN · capability `task:assign` (`●[P] ●[P] ✗ ✗`) · `project` resolver
   set (the `[P]` obligation names the assignee rule) · body `{
-  assigneeUserId: uuid | null }` — `null` unassigns.
+assigneeUserId: uuid | null }` — `null` unassigns.
 - **Object rule** enforced twice: the service checks the live membership;
   `growlith.enforce_task_assignee_membership()` re-checks in the database.
   409 `assignee_not_member` on failure.
@@ -1591,13 +1594,13 @@ changes in the system.
 - **AuthN/AuthZ** `required` · `deliverable:create` (`● ● ✗ ✗`) · tenant ←
   parent project row · AAL 1.
 - **Input** body `{ title≤200, description?≤4000, deliverableType:
-  deliverable_type enum, dueDate?: date, ownerUserId?: uuid }` strict +
+deliverable_type enum, dueDate?: date, ownerUserId?: uuid }` strict +
   `Idempotency-Key`. Status (`DRAFT`) and `clientVisible` (**false** — the
   inverted default) are schema defaults, not inputs.
 - **Output** `201` `DeliverableDTO` `{ id, organizationId, projectId, title,
-  description, deliverableType, status, clientVisible (staff DTO only),
-  currentVersion, revisionCount, dueDate, submittedAt, approvedAt,
-  approvedBy, ownerUserId, createdAt, updatedAt }` + `Location`.
+description, deliverableType, status, clientVisible (staff DTO only),
+currentVersion, revisionCount, dueDate, submittedAt, approvedAt,
+approvedBy, ownerUserId, createdAt, updatedAt }` + `Location`.
 - **Errors** `404` project unreachable · `409` owner not a project member
   (object rule, service check).
 - **Audit** `CREATE` · deliverable · NOTICE. **Idempotency** tier 3 — key
@@ -1609,7 +1612,7 @@ changes in the system.
   `organizationId` query (mandatory for CLIENT actors) · AAL 1 ·
   `CLIENT_VISIBLE` obligation recorded; RLS gate authoritative.
 - **Input** query: `organizationId? uuid` · `projectId? uuid` · `status?
-  csv(deliverable_status)` · `deliverableType? csv` · `ownerUserId? uuid` ·
+csv(deliverable_status)` · `deliverableType? csv` · `ownerUserId? uuid` ·
   pagination.
 - **Output** `200` list envelope of `DeliverableDTO`. CLIENT callers
   receive only rows past the strict gate; staff receive all non-deleted rows
@@ -1618,6 +1621,7 @@ changes in the system.
 - **Audit** none. Rate class `read`.
 
 ### J-3. `GET /api/v1/deliverables/{deliverableId}` · tenant ← row ·
+
 capability `deliverable:read` · `200` `DeliverableDTO` — for clients, the
 gate applies, so an in-progress deliverable is a **404**, exactly like a
 missing one. Rate class `read`.
@@ -1626,7 +1630,7 @@ missing one. Rate class `read`.
 
 - Capability `deliverable:update` (`●[S] ●[S] ✗ ✗`) · tenant ← row · body
   ≥ 1: `{ title?, description?, deliverableType?, dueDate?, ownerUserId?,
-  clientVisible? }`. Setting `clientVisible` true while status is below
+clientVisible? }`. Setting `clientVisible` true while status is below
   `CLIENT_REVIEW` is refused — 409 `visibility_requires_client_state`
   (the `deliverables_client_states_require_visibility` CHECK runs in the DB
   regardless; the API names it first).
@@ -1639,7 +1643,7 @@ missing one. Rate class `read`.
   (`DRAFT → IN_PROGRESS → INTERNAL_REVIEW → SUBMITTED → CLIENT_REVIEW`,
   `REVISION_REQUESTED → IN_PROGRESS`, `… → CANCELLED`). Capability
   `deliverable:update` `[S]`. The client-owned transitions (`CLIENT_REVIEW
-  → APPROVED|REVISION_REQUESTED`) and `APPROVED → PUBLISHED` are **not
+→ APPROVED|REVISION_REQUESTED`) and `APPROVED → PUBLISHED` are **not
   reachable here** — they are J-8 and J-9 with their own capabilities and
   RPC/role checks; `status_transitions.allowed_roles` is the single stored
   definition both consult (authorization §13).
@@ -1666,12 +1670,12 @@ missing one. Rate class `read`.
   (`●[S] ●[S] ◒[R][S] ✗`) — the client-driven transition, CLIENT_ADMIN only
   at the client end; staff may override · tenant ← row · AAL 1.
 - **Input** body — audience-shaped: clients `{ outcome: 'APPROVED'|
-  'REVISION_REQUESTED', notes?: string≤2000 }`; staff additionally may send
+'REVISION_REQUESTED', notes?: string≤2000 }`; staff additionally may send
   `outcome: 'REJECTED'` (a staff-recorded rejection, which the RPC maps to
   `REVISION_REQUESTED` and keeps the work alive). `notes` is **required**
-  for `REVISION_REQUESTED`/`REJECTED` (422 otherwise — the reason *is* the
+  for `REVISION_REQUESTED`/`REJECTED` (422 otherwise — the reason _is_ the
   review; the RPC re-checks) — maps 1:1 to `approve_deliverable(
-  p_deliverable_id, p_outcome, p_notes)`. The RPC validates the
+p_deliverable_id, p_outcome, p_notes)`. The RPC validates the
   `CLIENT_REVIEW` state, stamps `approvedAt/approvedBy` on approval, bumps
   `revisionCount` and appends the version row on the revision path, fans the
   owner notification, and audits — one transaction.
@@ -1700,13 +1704,13 @@ missing one. Rate class `read`.
 ### J-10. `POST /api/v1/deliverables/{deliverableId}/reviews`
 
 - **AuthN/AuthZ** `required` · `deliverable:update` (`●[S] ●[S] ✗ ✗`) — the
-  matrix has no `review` verb; an internal review *is* the state-and-version
+  matrix has no `review` verb; an internal review _is_ the state-and-version
   update, with the reviewer rule layered on · `project` resolver set ·
   tenant ← row · AAL 1.
 - **Input** body `{ outcome: review_outcome ('APPROVED'|
-  'REVISION_REQUESTED'|'REJECTED'), notes?≤2000, summary?≤2000 }` — maps to
+'REVISION_REQUESTED'|'REJECTED'), notes?≤2000, summary?≤2000 }` — maps to
   `submit_deliverable_review(p_deliverable_id, p_outcome, p_notes,
-  p_summary)`. The RPC's exact rules, surfaced as API contract: staff only;
+p_summary)`. The RPC's exact rules, surfaced as API contract: staff only;
   the deliverable must be at `INTERNAL_REVIEW` (409 otherwise); `notes`
   required for non-`APPROVED` outcomes (422); `REJECTED` is SUPER_ADMIN-only
   (a kill-call, authorization §A item 5); the reviewer must hold `LEAD` or
@@ -1730,8 +1734,8 @@ missing one. Rate class `read`.
 - **AuthN/AuthZ** `required` · `deliverable:read` — versions inherit the
   parent's gate exactly (authorization §B.3) · tenant ← parent row · AAL 1.
 - **Output** `200` list envelope of `DeliverableVersionDTO` `{ versionNumber,
-  summary, status, submittedBy, submittedAt, reviewedBy, reviewedAt,
-  reviewOutcome, reviewNotes, createdAt }`.
+summary, status, submittedBy, submittedAt, reviewedBy, reviewedAt,
+reviewOutcome, reviewNotes, createdAt }`.
 - **Page/filter/sort** fixed `versionNumber:desc`; no filters.
 - **Audit** none. Rate class `read`.
 
@@ -1753,15 +1757,15 @@ surfaces of v1 ([§17](#17-deliberate-absences)).
 - **AuthN/AuthZ** `required` · `report:create` (`● ● ✗ ✗`) · tenant ← path ·
   AAL 1.
 - **Input** body `{ title≤200, reportType: 'PERFORMANCE'|
-  'EXECUTIVE_SUMMARY'|'CAMPAIGN'|'SEO'|'TECHNICAL_AUDIT'|'QBR',
-  periodStart: date, periodEnd: date, currency?: currency_code,
-  engagementId?: uuid, serviceId?: uuid, summaryMd?≤20000 }` strict +
+'EXECUTIVE_SUMMARY'|'CAMPAIGN'|'SEO'|'TECHNICAL_AUDIT'|'QBR',
+periodStart: date, periodEnd: date, currency?: currency_code,
+engagementId?: uuid, serviceId?: uuid, summaryMd?≤20000 }` strict +
   `Idempotency-Key`. `status` (`DRAFT`) and `clientVisible` (false) are
   defaults, not inputs.
 - **Output** `201` `ReportDTO` `{ id, organizationId, engagementId,
-  serviceId, title, reportType, periodStart, periodEnd, status, currency,
-  summaryMd, publishedAt, publishedBy, clientVisible (staff DTO only),
-  createdAt, updatedAt }` + `Location`.
+serviceId, title, reportType, periodStart, periodEnd, status, currency,
+summaryMd, publishedAt, publishedBy, clientVisible (staff DTO only),
+createdAt, updatedAt }` + `Location`.
 - **Errors** `404` org unreachable · `409` engagement/service belongs to
   another tenant (composite FK, mapped).
 - **Validation** `periodEnd ≥ periodStart`; `serviceId` implies a matching
@@ -1785,7 +1789,7 @@ surfaces of v1 ([§17](#17-deliberate-absences)).
 
 - **AuthN/AuthZ** `required` · `report:read` · tenant ← row · AAL 1.
 - **Output** `200` `ReportDTO` plus `metrics: ReportMetricDTO[]` — `{
-  metricKey, metricDate, value, unit, currency, source }` — the frozen
+metricKey, metricDate, value, unit, currency, source }` — the frozen
   `report_metrics` rows. For a client caller the array exists only when the
   report is published; the row would be invisible otherwise. For a DRAFT
   report read by staff, `metrics` is `[]` — figures freeze at publication
@@ -1796,7 +1800,7 @@ surfaces of v1 ([§17](#17-deliberate-absences)).
 
 - Capability `report:update` (`● ● ✗ ✗`) · tenant ← row · body ≥ 1:
   `{ title?, reportType?, periodStart?, periodEnd?, currency?,
-  engagementId?, serviceId?, summaryMd? }`.
+engagementId?, serviceId?, summaryMd? }`.
 - **Frozen-once-published:** any PATCH of a `PUBLISHED` report is 409
   `report_frozen` (corrections are new reports); `ARCHIVED` rows refuse too.
 - **Output** `200` `ReportDTO`. **Audit** `UPDATE` · NOTICE. Idempotency
@@ -1838,7 +1842,7 @@ surfaces of v1 ([§17](#17-deliberate-absences)).
   signed URL to the report's export object (the `files` row of kind
   `REPORT_EXPORT` attached to the report). **Export generation is not a v1
   surface:** if no export artifact exists yet, the endpoint answers `404
-  export_not_generated` — honest absence, not a fake pipeline. The artifact
+export_not_generated` — honest absence, not a fake pipeline. The artifact
   itself is uploaded through the standard file flow ([§L](#l-files)) by the
   process that produces it.
 - **Errors** `404` report invisible or artifact absent · gate as J-3.
@@ -1855,8 +1859,8 @@ surfaces of v1 ([§17](#17-deliberate-absences)).
   `serviceLine? csv` · `metricKey? csv(metric_key)` · `from?/to? date`
   (inclusive range on `metric_date`) · pagination.
 - **Output** `200` list envelope of `MetricDTO` `{ organizationId,
-  serviceId, serviceLine, metricKey, metricDate, value, unit, currency,
-  source, ingestedAt }` — `value` as a decimal string.
+serviceId, serviceLine, metricKey, metricDate, value, unit, currency,
+source, ingestedAt }` — `value` as a decimal string.
 - **Page/filter/sort** default `metricDate:desc`, alternate `metricDate:asc`
   (chart-friendly). `(organization_id, service_id, metric_key, metric_date)`
   is the table's spine and covers every filter.
@@ -1877,17 +1881,17 @@ the same way. The API handles authorization, metadata and verification.
   through the caller's RLS and derives the tenant from it (clients can mint
   URLs only where they can already read the parent) · AAL 1.
 - **Input** body `{ fileName: sanitized-base≤255, mimeType: string≤120,
-  sizeBytes: int 1–(bucket limit), checksumSha256?: hex64,
-  fileKind: file_kind enum, clientVisible?: boolean default false,
-  parent: exactly-one of { projectId | deliverableId | deliverableVersionId
-  | taskId | reportId | commentId } | none (organization-level upload,
-  CLIENT_ADMIN+ for clients) }` strict + `Idempotency-Key`.
+sizeBytes: int 1–(bucket limit), checksumSha256?: hex64,
+fileKind: file_kind enum, clientVisible?: boolean default false,
+parent: exactly-one of { projectId | deliverableId | deliverableVersionId
+| taskId | reportId | commentId } | none (organization-level upload,
+CLIENT_ADMIN+ for clients) }` strict + `Idempotency-Key`.
 - **Output** `201` `{ uploadUrl, storagePath, expiresAt, fileRegistration:
-  { …the fields L-2 expects back… } }`. `storagePath` is server-built as
+{ …the fields L-2 expects back… } }`. `storagePath` is server-built as
   `{organization_id}/{entity_type}/{entity_id}/{ulid}-{sanitized-filename}`
   (README §I 🔒) — the caller never chooses a path.
 - **Errors** `404` parent unreachable · `415`-shaped refusal as `422
-  mime_not_allowed` (bucket allowlist: documents/images/video/archives; no
+mime_not_allowed` (bucket allowlist: documents/images/video/archives; no
   executables, no `text/html`) · `413` size beyond bucket limit.
 - **Validation** XOR parent refine; MIME against the allowlist; extension
   consistent with MIME (service check).
@@ -1910,9 +1914,9 @@ the same way. The API handles authorization, metadata and verification.
   row (`virus_scan_status = 'PENDING'` until the scan job says otherwise —
   no scanning dependency in v1, risk R-7), answer the DTO.
 - **Output** `201` `FileDTO` `{ id, organizationId, storagePath, fileName,
-  mimeType, sizeBytes, fileKind, clientVisible (staff DTO only),
-  uploadedBy, virusScanStatus, projectId | deliverableId | taskId |
-  reportId | commentId | null, createdAt }` + `Location`.
+mimeType, sizeBytes, fileKind, clientVisible (staff DTO only),
+uploadedBy, virusScanStatus, projectId | deliverableId | taskId |
+reportId | commentId | null, createdAt }` + `Location`.
 - **Errors** `409 file_not_found_in_storage` (uploaded nowhere or wrong
   path) · `409 size_mismatch` · `409 duplicate_registration` (same path
   registered twice).
@@ -1933,6 +1937,7 @@ the same way. The API handles authorization, metadata and verification.
 - **Audit** none. Rate class `read`.
 
 ### L-4. `GET /api/v1/files/{fileId}` · tenant ← row · capability
+
 `file:read` · `200` `FileDTO` (gate as L-3 — an unclean or internal file is
 a 404). Rate class `read`.
 
@@ -1944,8 +1949,8 @@ a 404). Rate class `read`.
   (README §I); the object gate and the metadata gate must agree
   (authorization §H.6; pgTAP asserts they never disagree).
 - **Errors** `404` gate failure · `409 scan_pending` for a `PENDING`/
-  `FAILED` scan on a staff download of an unscanned file is *allowed but
-  audited*; for clients it is a 404 by gate.
+  `FAILED` scan on a staff download of an unscanned file is _allowed but
+  audited_; for clients it is a 404 by gate.
 - **Audit** `FILE_DOWNLOAD` · attachment · INFO. Idempotency natural.
 
 ### L-6. `PATCH /api/v1/files/{fileId}` · `DELETE /api/v1/files/{fileId}`
@@ -1974,14 +1979,14 @@ schemas make both unrepresentable for client callers).
 - **AuthN/AuthZ** `required` · `comment:create` (`● ● ◒ ◒`) · tenant ←
   **subject row** (loaded through the caller's RLS) · AAL 1.
 - **Input** body `{ body: trimmed 1–4000, subject: exactly-one of {
-  projectId | deliverableId | taskId }, parentCommentId?: uuid,
-  isInternal?: boolean }` strict + `Idempotency-Key`. The **client schema
+projectId | deliverableId | taskId }, parentCommentId?: uuid,
+isInternal?: boolean }` strict + `Idempotency-Key`. The **client schema
   variant** (chosen by audience before parse) has no `isInternal` field and
   no `taskId` option — unknown-key rejection is the enforcement;
   `enforce_comment_author_scope()` is the DB wall.
 - **Output** `201` `CommentDTO` `{ id, organizationId, projectId |
-  deliverableId | taskId, parentCommentId, authorUserId, body, isInternal
-  (staff DTO only), editedAt, createdAt }` + `Location`.
+deliverableId | taskId, parentCommentId, authorUserId, body, isInternal
+(staff DTO only), editedAt, createdAt }` + `Location`.
 - **Errors** `404` subject unreachable/invisible · `409` parent comment has
   a different subject (`enforce_comment_thread_subject`, mapped) · `409`
   parent author/subject mismatch for client threads.
@@ -2005,6 +2010,7 @@ schemas make both unrepresentable for client callers).
 - **Audit** none. Rate class `read`.
 
 ### M-3. `GET /api/v1/comments/{commentId}` · tenant ← row · capability
+
 `comment:read` · `200` `CommentDTO` · `404` otherwise (internal comments are
 404s for clients, per gate). Rate class `read`.
 
@@ -2042,21 +2048,22 @@ server-side, inside the definer RPCs and services that cause the events.
   only; even SUPER_ADMIN reads only their own inbox · no tenant (self) ·
   AAL 1.
 - **Input** query: `unreadOnly? boolean` · `archived? boolean default
-  false` · `organizationId? uuid` (optional context filter —
+false` · `organizationId? uuid` (optional context filter —
   `organization_id` is nullable for platform notices) · pagination.
 - **Output** `200` list envelope of `NotificationDTO` `{ id,
-  notificationType, severity, title, body, subjectEntity, subjectId,
-  actionUrl, readAt, archivedAt, createdAt }`.
+notificationType, severity, title, body, subjectEntity, subjectId,
+actionUrl, readAt, archivedAt, createdAt }`.
 - **Page/filter/sort** fixed `createdAt:desc`.
 - **Audit** none. Rate class `read`.
 
 ### N-2. `GET /api/v1/notifications/{notificationId}` · SELF (recipient) ·
+
 `200` `NotificationDTO` · `404` for anyone else's row. Rate class `read`.
 
 ### N-3. `PATCH /api/v1/notifications/{notificationId}`
 
 - Capability `notification:update` (`◦ ◦ ◦ ◦`) · SELF · body ≥ 1: `{
-  read?: boolean, archived?: boolean }` — `read: false` clears `readAt`;
+read?: boolean, archived?: boolean }` — `read: false` clears `readAt`;
   nothing else on this table is mutable.
 - **Output** `200` `NotificationDTO`. **Audit** none (presence toggles are
   not business events). Idempotency natural. Rate class `mutation`.
@@ -2076,8 +2083,8 @@ audiences, one rule: **clients never touch the table** (authorization §F.4).
   · `entityId? uuid` · `action? csv(audit_action)` · `severity? csv` ·
   `actorUserId? uuid` · `from?/to? timestamp` · pagination.
 - **Output** `200` list envelope of `ActivityEventDTO` `{ id, occurredAt,
-  actorUserId, action, entityKind, entityId, organizationId, severity,
-  requestId, before, after }` — the `before/after` diff included for staff
+actorUserId, action, entityKind, entityId, organizationId, severity,
+requestId, before, after }` — the `before/after` diff included for staff
   because it is the point of an audit trail.
 - **Page/filter/sort** fixed `occurredAt:desc` (partition-pruned by
   `from/to` when supplied).
@@ -2101,8 +2108,8 @@ audiences, one rule: **clients never touch the table** (authorization §F.4).
   RPC's own cursor — a timestamp, not the base64 codec: the feed is
   append-only and time-ordered, so a bare `before` is honest keyset).
 - **Output** `200` `{ data: ClientActivityItem[], pagination: { limit,
-  hasMore, nextBefore } }` — `ClientActivityItem` `{ occurredAt,
-  entityKind, entityId, action, displayTitle }`.
+hasMore, nextBefore } }` — `ClientActivityItem` `{ occurredAt,
+entityKind, entityId, action, displayTitle }`.
 - **Errors** `404` org unreachable. **Audit** none. Rate class `read`.
 
 ---
@@ -2115,10 +2122,10 @@ audiences, one rule: **clients never touch the table** (authorization §F.4).
   four roles: every surface that renders a status label needs the vocabulary
   and its legal moves · no tenant · AAL 1.
 - **Input** query: `entityKind? csv(engagement|service|project|deliverable|
-  task)` — exactly the five machine-bearing entity kinds (D-5 and the §K
+task)` — exactly the five machine-bearing entity kinds (D-5 and the §K
   preamble record why organization and report are absent).
 - **Output** `200` `{ transitions: [{ entityKind, fromStatus, toStatus,
-  allowedRoles: Role[] }] }` — the seeded rows, unpaginated (reference set,
+allowedRoles: Role[] }] }` — the seeded rows, unpaginated (reference set,
   bounded, cached client-side by the Phase 9 app).
 - **Audit** none. Rate class `read`.
 
@@ -2134,7 +2141,7 @@ ever required, it arrives with its matrix row, not before.
 
 ## Q. Operational
 
-### Q-1. `GET /api/v1/health` · *implemented, Phase 1*
+### Q-1. `GET /api/v1/health` · _implemented, Phase 1_
 
 - `public`; reveals nothing tenant-shaped; rate class `read`. Operational
   infrastructure, not a stub — the only route allowed to exist before its
@@ -2150,36 +2157,36 @@ Every capability with at least one `ALLOW` cell maps to exactly one of: a
 route in Part II, a documented delegation, or a documented absence. This is
 the assertion the contract suite keeps alive after implementation:
 
-| Capability(s)                            | Where answered                                                                   |
-| ---------------------------------------- | -------------------------------------------------------------------------------- |
-| `organization:create/read/update/delete` | D-1…D-6                                                                          |
-| `organization:assign`                    | D-9                                                                              |
-| `organization:manage_settings`           | D-8 (read rides on `organization:read`, D-7)                                     |
-| `organization:manage_members`            | C-7…C-9 (route capability; `membership:create/update/delete` are what the RPC and RLS see — authorization §1.1) |
-| `membership:read`                        | C-6                                                                              |
-| `user:create`                            | **Delegated:** account birth is invitations (C-1) — there is no user-create endpoint by design |
-| `user:read`                              | B-1 (self), B-3, B-4                                                             |
-| `user:update`                            | B-2 (self profile); A-4 + the MFA routes (SELF branch); B-5…B-8 (status changes, platform-gated) |
-| `user:delete`                            | B-9 (RPC)                                                                        |
-| `platform_grant:create/read/delete`      | C-11, C-10, C-12 (all RPC-backed)                                                |
-| `invitation:create/read/update`          | C-1…C-5 · `invitation:delete` is `✗` for everyone — retention job, no endpoint  |
-| `team_membership:create/read/update/delete` | C-15, C-13/C-14, C-16, C-17                                                   |
-| `engagement:*`                           | F-1…F-7                                                                          |
-| `service:*`                              | G-1…G-7                                                                          |
-| `project:create/read/update/delete/assign` | H-1…H-7                                                                        |
-| `project:manage_members`                 | H-9, H-10 (route capability; `project_membership:update/delete` are the RLS-layer verbs) |
-| `project_membership:read`                | H-8                                                                              |
-| `task:create/read/update/delete/assign`  | I-1, I-2/I-3, I-4+I-5, I-7, I-6                                                  |
-| `deliverable:create/read/update/delete/assign` | J-1, J-2/J-3/J-11, J-4+J-5, J-6, J-7                                       |
-| `deliverable:approve/publish`            | J-8 (RPC), J-9                                                                   |
-| `deliverable:upload/download`            | **Delegated** to `file:upload`/`file:download` with a deliverable parent (L-1/L-5) — no separate routes |
-| `report:create/read/update/delete/publish/download` | K-1, K-2/K-3/K-8, K-4, K-5, K-6 (RPC), K-7                            |
-| `file:upload/read/update/delete/download` | L-1+L-2, L-3/L-4, L-6, L-6, L-5 · `file:create` is NA — an upload *is* the create |
-| `notification:read/update`               | N-1/N-2, N-3 · `create`/`delete` are `✗` for every role — emission is server-side, retention is a job |
-| `activity:read`                          | O-1 · clients get the projection (O-2) under `organization:read`, never the table |
-| `comment:create/read/update/delete`      | M-1…M-5                                                                          |
-| `status_transition:read`                 | P-1                                                                              |
-| `platform_settings:*`                    | **Reserved:** the table arrives in Phase 7; no route may ship before it         |
+| Capability(s)                                       | Where answered                                                                                                  |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `organization:create/read/update/delete`            | D-1…D-6                                                                                                         |
+| `organization:assign`                               | D-9                                                                                                             |
+| `organization:manage_settings`                      | D-8 (read rides on `organization:read`, D-7)                                                                    |
+| `organization:manage_members`                       | C-7…C-9 (route capability; `membership:create/update/delete` are what the RPC and RLS see — authorization §1.1) |
+| `membership:read`                                   | C-6                                                                                                             |
+| `user:create`                                       | **Delegated:** account birth is invitations (C-1) — there is no user-create endpoint by design                  |
+| `user:read`                                         | B-1 (self), B-3, B-4                                                                                            |
+| `user:update`                                       | B-2 (self profile); A-4 + the MFA routes (SELF branch); B-5…B-8 (status changes, platform-gated)                |
+| `user:delete`                                       | B-9 (RPC)                                                                                                       |
+| `platform_grant:create/read/delete`                 | C-11, C-10, C-12 (all RPC-backed)                                                                               |
+| `invitation:create/read/update`                     | C-1…C-5 · `invitation:delete` is `✗` for everyone — retention job, no endpoint                                  |
+| `team_membership:create/read/update/delete`         | C-15, C-13/C-14, C-16, C-17                                                                                     |
+| `engagement:*`                                      | F-1…F-7                                                                                                         |
+| `service:*`                                         | G-1…G-7                                                                                                         |
+| `project:create/read/update/delete/assign`          | H-1…H-7                                                                                                         |
+| `project:manage_members`                            | H-9, H-10 (route capability; `project_membership:update/delete` are the RLS-layer verbs)                        |
+| `project_membership:read`                           | H-8                                                                                                             |
+| `task:create/read/update/delete/assign`             | I-1, I-2/I-3, I-4+I-5, I-7, I-6                                                                                 |
+| `deliverable:create/read/update/delete/assign`      | J-1, J-2/J-3/J-11, J-4+J-5, J-6, J-7                                                                            |
+| `deliverable:approve/publish`                       | J-8 (RPC), J-9                                                                                                  |
+| `deliverable:upload/download`                       | **Delegated** to `file:upload`/`file:download` with a deliverable parent (L-1/L-5) — no separate routes         |
+| `report:create/read/update/delete/publish/download` | K-1, K-2/K-3/K-8, K-4, K-5, K-6 (RPC), K-7                                                                      |
+| `file:upload/read/update/delete/download`           | L-1+L-2, L-3/L-4, L-6, L-6, L-5 · `file:create` is NA — an upload _is_ the create                               |
+| `notification:read/update`                          | N-1/N-2, N-3 · `create`/`delete` are `✗` for every role — emission is server-side, retention is a job           |
+| `activity:read`                                     | O-1 · clients get the projection (O-2) under `organization:read`, never the table                               |
+| `comment:create/read/update/delete`                 | M-1…M-5                                                                                                         |
+| `status_transition:read`                            | P-1                                                                                                             |
+| `platform_settings:*`                               | **Reserved:** the table arrives in Phase 7; no route may ship before it                                         |
 
 Matrix cells that are `DENY` for all roles correspond to **no endpoint** —
 asserted, not assumed, by the dead-capability test ([§18](#18-verification-strategy)).
@@ -2210,7 +2217,7 @@ Each of these looks plausible and none exists, for a named reason:
    that must already exist; the generation pipeline is not designed and
    is not faked.
 8. **Report lifecycle moves other than publication** — `DRAFT →
-   INTERNAL_REVIEW` and `PUBLISHED → ARCHIVED` have no v1 endpoint: reports
+INTERNAL_REVIEW` and `PUBLISHED → ARCHIVED` have no v1 endpoint: reports
    sit deliberately outside `status_transitions` (a linear lifecycle),
    publication is the one trust event and has its RPC (K-6), and the other
    moves get a surface when a workflow needs them — with their authorization
@@ -2221,13 +2228,13 @@ Each of these looks plausible and none exists, for a named reason:
 
 ## 18. Verification strategy
 
-| Level | Suite                            | Proves                                                                                             | Blocking |
-| ----- | -------------------------------- | -------------------------------------------------------------------------------------------------- | :------: |
-| L1    | `tests/unit/**`                  | cursor codec round-trip per declared sort key; money/date/csv field primitives; enum parity between validation schemas and generated DB types; state-machine module equals `status_transitions` seed | ✅ |
-| L2    | `tests/unit/permissions.spec.ts` | unchanged Phase 4 invariants; **plus** the coverage table of [§16](#16-coverage-assertions) encoded as data | ✅ |
-| L3    | `tests/contract/**`              | every route built with `withRoute` (existing); every `required` route declares a live capability (extend existing `route-capability` suite); **no declared capability is held by zero roles** (dead-capability test); 404-before-403 with a fixture actor outside the tenant; idempotency replay/reuse/not-consumed-on-4xx; DTO audience property test — no internal-only field ever serializes into a client-shaped DTO; list envelope shape + `cursor_mismatch` 422 | ✅ |
-| L4    | `supabase/tests/*.sql` (pgTAP)   | Phase 4's obligations unchanged; Phase 5 adds: `idempotency_keys` expiry and uniqueness; `archive_organization()` ceilings (audit-first, slug confirmation, live-children refusal) | ✅ |
-| L5    | `tests/e2e/**`                   | Phase 8 — full journeys incl. the client-A-vs-client-B negative test through real endpoints        | Phase 8  |
+| Level | Suite                            | Proves                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Blocking |
+| ----- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------: |
+| L1    | `tests/unit/**`                  | cursor codec round-trip per declared sort key; money/date/csv field primitives; enum parity between validation schemas and generated DB types; state-machine module equals `status_transitions` seed                                                                                                                                                                                                                                                                  |    ✅    |
+| L2    | `tests/unit/permissions.spec.ts` | unchanged Phase 4 invariants; **plus** the coverage table of [§16](#16-coverage-assertions) encoded as data                                                                                                                                                                                                                                                                                                                                                           |    ✅    |
+| L3    | `tests/contract/**`              | every route built with `withRoute` (existing); every `required` route declares a live capability (extend existing `route-capability` suite); **no declared capability is held by zero roles** (dead-capability test); 404-before-403 with a fixture actor outside the tenant; idempotency replay/reuse/not-consumed-on-4xx; DTO audience property test — no internal-only field ever serializes into a client-shaped DTO; list envelope shape + `cursor_mismatch` 422 |    ✅    |
+| L4    | `supabase/tests/*.sql` (pgTAP)   | Phase 4's obligations unchanged; Phase 5 adds: `idempotency_keys` expiry and uniqueness; `archive_organization()` ceilings (audit-first, slug confirmation, live-children refusal)                                                                                                                                                                                                                                                                                    |    ✅    |
+| L5    | `tests/e2e/**`                   | Phase 8 — full journeys incl. the client-A-vs-client-B negative test through real endpoints                                                                                                                                                                                                                                                                                                                                                                           | Phase 8  |
 
 ## 19. Implementation sequence
 
@@ -2260,7 +2267,7 @@ Ordered so every step is green and testable when it lands:
    reports/metrics (K) → files (L) → comments (M) → notifications (N) →
    activity (O).
 8. **Close-out** — coverage table encoded in L2, README §H status flipped,
-   this document's header changed to *implemented*, the compatibility
+   this document's header changed to _implemented_, the compatibility
    contract declared live.
 
 ## 20. What Phase 5 deliberately does not build
