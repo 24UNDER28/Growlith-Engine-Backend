@@ -25,6 +25,7 @@ const GET = withRoute({
   // Public by definition: a liveness probe exists so infrastructure can ask
   // "is the process up?" without authenticating (§15 taxonomy).
   auth: 'public',
+  rateLimit: { class: 'read' },
   summary: 'liveness probe',
   handler: async () => ({ status: 'ok' as const }),
 });

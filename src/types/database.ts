@@ -11,6 +11,7 @@
  * └──────────────────────────────────────────────────────────────────────────┘
  *
  * Generated from the Phase 2 schema: 24 tables, 36 enums.
+ * Phase 5 appends `idempotency_keys` and `archive_organization`.
  *
  * Both generators read the same catalog and emit the same shape, so call sites
  * cannot tell which produced this file. Output is ordered by name, making
@@ -407,6 +408,39 @@ export interface Database {
           updated_by?: string | null;
           deleted_at?: string | null;
           deleted_by?: string | null;
+        };
+        Relationships: [];
+      };
+      idempotency_keys: {
+        Row: {
+          actor_user_id: string;
+          route: string;
+          key: string;
+          request_hash: string;
+          status_code: number;
+          response_body: Json;
+          response_headers: Json;
+          created_at: string;
+        };
+        Insert: {
+          actor_user_id: string;
+          route: string;
+          key: string;
+          request_hash: string;
+          status_code: number;
+          response_body: Json;
+          response_headers?: Json;
+          created_at?: string;
+        };
+        Update: {
+          actor_user_id?: string;
+          route?: string;
+          key?: string;
+          request_hash?: string;
+          status_code?: number;
+          response_body?: Json;
+          response_headers?: Json;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -1370,6 +1404,10 @@ export interface Database {
         Returns: unknown;
       };
       approve_deliverable: {
+        Args: Record<string, unknown>;
+        Returns: unknown;
+      };
+      archive_organization: {
         Args: Record<string, unknown>;
         Returns: unknown;
       };

@@ -21,6 +21,7 @@ const cursorPayloadSchema = z
   .object({
     key: z.union([z.string(), z.number(), z.null()]),
     id: z.string().min(1),
+    sort: z.string().min(1).max(64).optional(),
   })
   .strict();
 

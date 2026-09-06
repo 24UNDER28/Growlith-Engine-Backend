@@ -21,6 +21,12 @@ export interface PaginationMeta {
   /** `null` when the end of the collection has been reached. */
   readonly nextCursor: Cursor | null;
   readonly hasMore: boolean;
+  /**
+   * Timestamp watermark for the client activity feed (O-2). Ordinary list
+   * endpoints omit this field; the feed sets `nextCursor` to `null` and pages
+   * on `nextBefore` instead.
+   */
+  readonly nextBefore?: string | null | undefined;
 }
 
 /**
@@ -29,8 +35,18 @@ export interface PaginationMeta {
  * `key` is the sort value of the last row on the previous page and `id` is that
  * row's identifier, which together make the keyset unique even when many rows
  * share a sort value (the common case for `created_at`).
+ *
+ * `sort` is encoded so a client cannot reuse a cursor issued under a different
+ * ordering (`cursor_mismatch`). Older cursors omit it and still decode.
  */
 export interface CursorPayload {
   readonly key: string | number | null;
   readonly id: string;
+  readonly sort?: string | undefined;
+}
+
+/** Handler return shape for list endpoints (`withRoute({ pageResult: true })`). */
+export interface PageResult<T> {
+  readonly data: readonly T[];
+  readonly pagination: PaginationMeta;
 }

@@ -12,8 +12,9 @@ implements L1, L3 and the architectural conformance layer.
 | `helpers/`      | —     | Source-scanning utilities used by the architecture tests                                                             |
 | `stubs/`        | —     | An inert `server-only` stand-in; see below                                                                           |
 
-Not here yet: **L2** (the role × capability matrix, Phase 4), **L4** (pgTAP RLS
-tests in `supabase/tests/`, Phase 2), **L5** (Playwright, Phase 9).
+**L2** lives in `tests/unit/permissions.spec.ts` (the dense matrix plus Phase 5
+route-coverage). Not here yet: **L4** (pgTAP RLS tests in `supabase/tests/`),
+**L5** (Playwright, Phase 9).
 
 ## Why `unit/domain.spec.ts` exists for data that has no behaviour
 

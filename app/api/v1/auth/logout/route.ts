@@ -16,6 +16,7 @@ export const dynamic = 'force-dynamic';
 const POST = withRoute({
   method: 'POST',
   auth: 'public',
+  rateLimit: { class: 'auth' },
   summary: 'sign out on every device',
   successStatus: 204,
   handler: async ({ request, requestId }) => {

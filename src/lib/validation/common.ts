@@ -80,3 +80,97 @@ export function boundedString(label: string, min: number, max: number): z.ZodStr
     .min(min, `${label} must be at least ${min} characters`)
     .max(max, `${label} must be at most ${max} characters`);
 }
+
+/**
+ * Organization slugs appear in `/portal/[orgSlug]` and must match the
+ * `organizations_slug_shape` CHECK (min 3, max 64, no leading/trailing hyphen).
+ */
+export function organizationSlugField(): z.ZodString {
+  return z
+    .string()
+    .trim()
+    .min(3, 'slug must be at least 3 characters')
+    .max(64, 'slug must be at most 64 characters')
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
+      message: 'slug may contain only lowercase letters, numbers and single hyphens',
+    });
+}
+
+/** A calendar date (YYYY-MM-DD), never a timestamp. */
+export function dateField(label: string): z.ZodType<string> {
+  return z.iso.date({ message: `${label} must be a calendar date (YYYY-MM-DD)` });
+}
+
+/** Closed vocabulary. The message names the allowed values so a 422 is actionable. */
+export function enumField<T extends string>(label: string, values: readonly T[]): z.ZodType<T> {
+  const [first, ...rest] = values;
+  if (first === undefined) {
+    throw new Error(`${label} enum must have at least one value`);
+  }
+  return z.enum([first, ...rest], {
+    message: `${label} must be one of: ${values.join(', ')}`,
+  }) as unknown as z.ZodType<T>;
+}
+
+/**
+ * Comma-separated query values. Duplicates are dropped, empties ignored, and
+ * the cap prevents `?status=a,a,a…` from becoming a denial-of-service vector.
+ */
+export function csvField<T>(inner: z.ZodType<T>, max = 20): z.ZodType<readonly T[]> {
+  return z.string().transform((raw, ctx) => {
+    const parts = [
+      ...new Set(
+        raw
+          .split(',')
+          .map((part) => part.trim())
+          .filter((part) => part.length > 0),
+      ),
+    ];
+    if (parts.length > max) {
+      ctx.addIssue({ code: 'custom', message: `at most ${max} values` });
+      return z.NEVER;
+    }
+    const out: T[] = [];
+    for (const part of parts) {
+      const parsed = inner.safeParse(part);
+      if (!parsed.success) {
+        ctx.addIssue({
+          code: 'custom',
+          message: parsed.error.issues[0]?.message ?? 'invalid value',
+        });
+        return z.NEVER;
+      }
+      out.push(parsed.data);
+    }
+    return out;
+  });
+}
+
+/** Non-negative money stored as `numeric(14,2)`. Floats are rejected. */
+export function moneyField(label: string): z.ZodNumber {
+  return z
+    .number({ message: `${label} must be a number` })
+    .finite(`${label} must be finite`)
+    .min(0, `${label} must be at least 0`)
+    .max(99_999_999_999_999, `${label} is too large`);
+}
+
+/** Hex colour `#RRGGBB` as stored on organization_settings. */
+export function hexColorField(label: string): z.ZodString {
+  return z
+    .string()
+    .trim()
+    .regex(/^#[0-9A-Fa-f]{6}$/, { message: `${label} must be a #RRGGBB hex colour` });
+}
+
+/** http(s) URL with an upper bound so a client cannot store a novel. */
+export function httpUrlField(label: string, max = 2048): z.ZodString {
+  return z
+    .string()
+    .trim()
+    .max(max, `${label} must be at most ${max} characters`)
+    .url({ message: `${label} must be a valid URL` })
+    .refine((value) => /^https?:\/\//i.test(value), {
+      message: `${label} must be an http(s) URL`,
+    });
+}

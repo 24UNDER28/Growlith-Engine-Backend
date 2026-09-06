@@ -20,6 +20,7 @@ export const paginationQuerySchema = z
       .max(MAX_PAGE_SIZE, `limit must be at most ${MAX_PAGE_SIZE}`)
       .optional(),
     cursor: z.string().min(1).max(512).optional(),
+    sort: z.string().min(1).max(64).optional(),
   })
   .strict();
 

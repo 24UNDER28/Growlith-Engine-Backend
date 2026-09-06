@@ -52,6 +52,12 @@ export const AUTH_AUDIT_ACTIONS = [
   // probe log, which is the very enumeration side-channel the 404 rule
   // exists to close.
   'PERMISSION_DENIED',
+  'CREATE',
+  'SOFT_DELETE',
+  'RESTORE',
+  'HARD_DELETE',
+  'EXPORT',
+  'FILE_DOWNLOAD',
 ] as const;
 export type AuthAuditAction = (typeof AUTH_AUDIT_ACTIONS)[number];
 

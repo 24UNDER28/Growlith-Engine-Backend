@@ -309,7 +309,9 @@ async function resendPendingInvitation(input: {
  * service client here — a guard that sees more than the caller does is how
  * existence leaks.
  */
-export async function invitationOrganizationIdForGuard(id: string): Promise<string | null> {
+export async function invitationOrganizationIdForGuard(
+  id: string,
+): Promise<string | null | undefined> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('invitations')
@@ -321,8 +323,13 @@ export async function invitationOrganizationIdForGuard(id: string): Promise<stri
     // masquerade as an absent invitation.
     throw ApiError.serviceUnavailable('The invitation could not be inspected.');
   }
-  const raw = (data as { organization_id?: string | null } | null)?.organization_id;
-  return typeof raw === 'string' ? raw : null;
+  if (data === null) {
+    return null;
+  }
+  const raw = (data as { organization_id?: string | null }).organization_id;
+  // A live staff invitation names no tenant: `undefined` lets the GLOBAL
+  // cells of `invitation:*` proceed. `null` would 404 the platform branch.
+  return typeof raw === 'string' ? raw : undefined;
 }
 
 export async function revokeInvitation(input: {

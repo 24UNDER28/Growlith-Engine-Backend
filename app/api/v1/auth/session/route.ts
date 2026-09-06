@@ -22,6 +22,7 @@ export const dynamic = 'force-dynamic';
 const GET = withRoute({
   method: 'GET',
   auth: 'public',
+  rateLimit: { class: 'read' },
   summary: 'report the current session context, or null',
   handler: async () => ({ session: await resolveAuthContext() }),
 });

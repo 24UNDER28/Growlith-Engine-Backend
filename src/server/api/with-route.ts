@@ -5,14 +5,20 @@ import { z } from 'zod';
 import type { AuthContext } from '@/lib/auth/context';
 import type { Capability, PermissionQualifier } from '@/lib/domain/permissions';
 import type { EntityKind } from '@/lib/domain/entities';
+import type { PageResult } from '@/lib/types/pagination';
 import { authorize } from '@/server/auth/authorize';
 import type { HttpMethod } from '@/lib/types/http';
 import type { SuccessStatusCode } from '@/lib/types/api-envelope';
 import { toValidationIssues } from '@/lib/validation/format';
 import { REQUEST_ID_HEADER, resolveRequestId } from '@/lib/utils/request-id';
 import { ApiError, toApiError } from '@/server/api/errors';
+import { replayIdempotent, storeIdempotent } from '@/server/api/idempotency';
 import { requireAuthContext } from '@/server/auth/context';
 import { createLogger, type Logger } from '@/server/logging/logger';
+
+/** Rate-limit class. Declared now; the limiter itself arrives in Phase 6. */
+export const RATE_CLASSES = ['auth', 'sensitive', 'mutation', 'read', 'export'] as const;
+export type RateClass = (typeof RATE_CLASSES)[number];
 
 /**
  * `withRoute` — the single entry point for every `/api/v1/**` handler.
@@ -175,6 +181,17 @@ export interface RouteDefinitionCore<
   readonly querySchema?: z.ZodType<TQuery>;
   readonly bodySchema?: z.ZodType<TBody>;
   readonly successStatus?: SuccessStatusCode;
+  /**
+   * Declaration-only rate class (Phase 6 owns the limiter). Logged on every
+   * access line so the class is observable before the mechanism exists.
+   */
+  readonly rateLimit?: { readonly class: RateClass };
+  /** Serialize the handler result as a list envelope `{ data, pagination, meta }`. */
+  readonly pageResult?: boolean;
+  /** `Location` header on 201 — the created resource's canonical path. */
+  readonly location?: (data: TData) => string;
+  /** ADR-0028: require `Idempotency-Key` and replay stored successes. */
+  readonly idempotency?: boolean;
   readonly handler: (
     context: RouteHandlerContext<TParams, TQuery, TBody, TAuth>,
   ) => Promise<TData> | TData;
@@ -214,6 +231,10 @@ type AnyRouteDefinition = RouteDefinitionCore<
 > & {
   readonly auth: RouteAuth;
   readonly capability?: Capability;
+  readonly rateLimit?: { readonly class: RateClass };
+  readonly pageResult?: boolean;
+  readonly location?: (data: unknown) => string;
+  readonly idempotency?: boolean;
 } & RouteAuthorizationFields<unknown, unknown, unknown>;
 
 /** Convenience resolvers: the two shapes nearly every route uses. */
@@ -343,6 +364,36 @@ export function withRoute<
         obligations = guard.obligations;
       }
 
+      // Idempotency (ADR-0028) runs AFTER the capability check so a denied
+      // request cannot mint or consume a key, and BEFORE the handler so a
+      // replay never re-executes the mutation.
+      let idempotencyKey: string | null = null;
+      if (authz.idempotency === true) {
+        if (definition.auth !== 'required' || auth === undefined) {
+          throw ApiError.internal(
+            new Error(`idempotent route ${definition.method} ${pathname} is not authenticated`),
+          );
+        }
+        const replay = await replayIdempotent({
+          request,
+          actorUserId: (auth as AuthContext).userId,
+          route: `${definition.method} ${pathname}`,
+          body,
+        });
+        if (replay.kind === 'replay') {
+          const tookMs = elapsed(startedAt);
+          log.info(`request completed — ${definition.summary} (idempotent replay)`, {
+            status: replay.status,
+            tookMs,
+            rateClass: authz.rateLimit?.class,
+          });
+          return buildResponse(replay.status, replay.payload, requestId, {
+            headers: replay.headers,
+          });
+        }
+        idempotencyKey = replay.key;
+      }
+
       const data = await definition.handler({
         request,
         params,
@@ -356,9 +407,35 @@ export function withRoute<
 
       const status = definition.successStatus ?? 200;
       const tookMs = elapsed(startedAt);
-      log.info(`request completed — ${definition.summary}`, { status, tookMs });
+      log.info(`request completed — ${definition.summary}`, {
+        status,
+        tookMs,
+        ...(authz.rateLimit === undefined ? {} : { rateClass: authz.rateLimit.class }),
+      });
 
-      return buildResponse(status, { data: data ?? null, meta: { requestId, tookMs } }, requestId);
+      const extraHeaders: Record<string, string> = {};
+      if (status === 201 && authz.location !== undefined && data !== undefined && data !== null) {
+        extraHeaders.Location = authz.location(data);
+      }
+
+      const payload = authz.pageResult
+        ? pageEnvelope(data, requestId, tookMs)
+        : { data: data ?? null, meta: { requestId, tookMs } };
+
+      if (idempotencyKey !== null && definition.auth === 'required' && auth !== undefined) {
+        await storeIdempotent({
+          actorUserId: (auth as AuthContext).userId,
+          route: `${definition.method} ${pathname}`,
+          key: idempotencyKey,
+          request,
+          body,
+          status,
+          payload,
+          headers: extraHeaders,
+        });
+      }
+
+      return buildResponse(status, payload, requestId, { headers: extraHeaders });
     } catch (error) {
       const apiError = toApiError(error);
       const tookMs = elapsed(startedAt);
@@ -508,6 +585,9 @@ async function readBody<TBody>(
   if (text.length === 0) {
     throw ApiError.badRequest('A JSON request body is required.');
   }
+  // Content-Type is required only when a body is actually present. An empty
+  // body is already rejected above; charset is allowed (`application/json; charset=utf-8`).
+  assertJsonContentType(request);
   if (Buffer.byteLength(text, 'utf8') > MAX_JSON_BODY_BYTES) {
     throw ApiError.payloadTooLarge(BODY_TOO_LARGE_DETAIL);
   }
@@ -556,6 +636,26 @@ function buildResponse(
 
 function elapsed(startedAt: number): number {
   return Math.round(performance.now() - startedAt);
+}
+
+function pageEnvelope(data: unknown, requestId: string, tookMs: number): unknown {
+  const result = data as PageResult<unknown>;
+  return {
+    data: result.data,
+    pagination: result.pagination,
+    meta: { requestId, tookMs },
+  };
+}
+
+function assertJsonContentType(request: Request): void {
+  const raw = request.headers.get('content-type');
+  if (raw === null || raw === '') {
+    throw ApiError.badRequest('A JSON Content-Type is required.');
+  }
+  const media = raw.split(';')[0]?.trim().toLowerCase();
+  if (media !== 'application/json') {
+    throw ApiError.badRequest('A JSON Content-Type is required.');
+  }
 }
 
 /**

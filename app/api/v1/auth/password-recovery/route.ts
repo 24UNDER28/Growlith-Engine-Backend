@@ -16,6 +16,7 @@ export const dynamic = 'force-dynamic';
 const POST = withRoute({
   method: 'POST',
   auth: 'public',
+  rateLimit: { class: 'auth' },
   summary: 'request a password recovery email',
   bodySchema: passwordRecoveryBodySchema,
   successStatus: 202,
