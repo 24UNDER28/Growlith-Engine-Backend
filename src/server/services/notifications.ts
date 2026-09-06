@@ -29,7 +29,6 @@ export async function listNotifications(input: {
       }
       return next;
     },
-    keyOf: (row) => row.created_at,
   });
   return { data: page.data.map(toNotificationDto), pagination: page.pagination };
 }

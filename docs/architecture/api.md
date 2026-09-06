@@ -704,9 +704,11 @@ AVATAR`).
 - **AuthN/AuthZ** `required` · `user:read` · tenant ← `organizationId` query
   — **mandatory for CLIENT actors** (422 `organization_required` if absent),
   optional for staff (omitting it is the cross-tenant directory read) · AAL 1.
-- **Input** query: `organizationId? uuid` · `ids? csv(uuid, ≤50)` ·
-  `userType? INTERNAL|CLIENT` (staff-only; 422 for clients — they cannot
-  filter the staff roster into view) · pagination.
+- **Input** query: `organizationId? uuid` (mandatory for CLIENT actors) ·
+  `ids? csv(uuid, ≤50)` · `userType? INTERNAL|CLIENT` · `status?`,
+  `team?`, `q?≤200` — the last four are staff-only directory axes: a CLIENT
+  call carrying any of them is a `422` (a client cannot enumerate the staff
+  roster or its account states) · pagination.
 - **Output** `200` list envelope of `UserSummaryDTO`. Staff audience:
   `{ id, fullName, displayName, avatarPath, jobTitle, userType, email,
 accountStatus, lastSeenAt }`; client audience — exactly the granted
@@ -714,11 +716,15 @@ accountStatus, lastSeenAt }`; client audience — exactly the granted
 avatarPath, jobTitle }`. No `email`, no `userType`, no `lastSeenAt`, no
   phone or MFA fields of other people; the client directory does not
   distinguish staff from co-members, because the grant says it must not.
-- **Page/filter/sort** keyset: default `fullName:asc` (key = lower-cased
-  full name; implementation adds the supporting index), alternate
-  `createdAt:desc`. Filters as Input; the directory for an org = its members
-  plus staff identities on its work (RLS `shares_org_with()`), never the
-  whole staff roster for client callers.
+- **Page/filter/sort** keyset: `createdAt:desc` only. TEXT sort keys are
+  deliberately not offered here or on any list endpoint: a keyset cursor
+  must embed the last row's sort value into a PostgREST `or(...)` filter,
+  and text values containing `,`/`(`/`)` would corrupt that filter, so
+  text-sorted keyset pagination is not representable (crud list contract,
+  `src/server/services/crud.ts`). The directory for an org = its members
+  plus staff identities on its work (RLS `shares_org_with()`); an `ids`
+  lookup is scoped by the same RLS, so a client can resolve the staff
+  identities attached to its own work without ever listing the roster.
 - **Errors** `404`-shaped empties are `200 []` — no 404 for lists.
 - **Validation** csv caps; uuid shapes; `userType` restriction above.
 - **Audit** none (read); cross-tenant staff reads are log-visible ([§11](#11-logging-strategy)).
@@ -1043,14 +1049,18 @@ createdAt }` + `Location`. The settings row is trigger-created
 
 - **AuthN/AuthZ** `required` · `organization:read` (`● ● ◑ ◑`) · **no
   tenant parameter** — staff get the cross-tenant list (GLOBAL cells); a
-  CLIENT actor receives `403` by the matrix and uses `GET /api/v1/me`
-  instead ([§E](#e-clients)). AAL 1.
+  CLIENT actor's cells are TENANT-scoped, so with no tenant to scope them
+  the guard answers the ADR-0019 response — `404` — and the client uses
+  `GET /api/v1/me` instead ([§E](#e-clients)). AAL 1.
 - **Input** query: `status? csv(org_status)` · `region? csv(region_code)` ·
-  `accountManagerUserId? uuid` · pagination.
+  `q?≤200` (free-text name/slug search; `, ( ) "` and control characters
+  rejected — the term is interpolated into a PostgREST `or(...)` filter) ·
+  pagination.
 - **Output** `200` list envelope of `OrganizationDTO`.
-- **Page/filter/sort** default `displayName:asc` (indexed), alternate
-  `createdAt:desc`. Filters map to existing indexes (status, region,
-  account manager).
+- **Page/filter/sort** keyset: `createdAt:desc` only. TEXT sort keys are
+  deliberately not offered (same keyset-cursor rationale as B-3 — see
+  `src/server/services/crud.ts`). Filters map to existing indexes (status,
+  region).
 - **Errors** global. **Audit** none. Rate class `read`.
 
 ### D-3. `GET /api/v1/organizations/{organizationId}`
@@ -1397,8 +1407,9 @@ OFF_TRACK)` · `leadUserId? uuid` · `owningTeam? csv(team)` · pagination.
 - **Output** `200` list envelope of `ProjectDTO` — clients see only rows
   with `client_visible = true` (RLS), and never see a flag they could flip:
   `clientVisible` itself is included in the DTO only for staff.
-- **Page/filter/sort** default `createdAt:desc`, alternates `targetDate:asc`
-  (deadline view), `name:asc`. All filter columns are indexed.
+- **Page/filter/sort** keyset: default `createdAt:desc`, alternate
+  `targetDate:asc` (deadline view — ascending keyset). TEXT sort keys
+  (`name`) are not offered, for the keyset-cursor reason stated in B-3.
 - **Errors** global. **Audit** none. Rate class `read`.
 
 ### H-3. `GET /api/v1/projects/{projectId}` · tenant ← row · capability
@@ -1530,9 +1541,9 @@ actualHours, blockedReason, position, createdAt, updatedAt }` +
   `deliverableId? uuid` · `status? csv(task_status)` · `assigneeUserId?
 uuid` · `assignedTeam? csv(team)` · `dueFrom?/dueTo? date` · pagination.
 - **Output** `200` list envelope of `TaskDTO`.
-- **Page/filter/sort** default `createdAt:desc`, alternates `dueDate:asc`
-  (the "due this week" admin view of authorization §C.2), `priority:desc`
-  (enum-ordinal key).
+- **Page/filter/sort** keyset: default `createdAt:desc`, alternates
+  `dueDate:asc` (the "due this week" admin view of authorization §C.2) and
+  `position:asc` (board order).
 - **Audit** none. Rate class `read`.
 
 ### I-3. `GET /api/v1/tasks/{taskId}` · tenant ← row · `200` `TaskDTO` ·
@@ -1858,8 +1869,8 @@ export_not_generated` — honest absence, not a fake pipeline. The artifact
 - **Output** `200` list envelope of `MetricDTO` `{ organizationId,
 serviceId, serviceLine, metricKey, metricDate, value, unit, currency,
 source, ingestedAt }` — `value` as a decimal string.
-- **Page/filter/sort** default `metricDate:desc`, alternate `metricDate:asc`
-  (chart-friendly). `(organization_id, service_id, metric_key, metric_date)`
+- **Page/filter/sort** keyset: default `metricDate:desc`, alternate
+  `createdAt:desc`. `(organization_id, service_id, metric_key, metric_date)`
   is the table's spine and covers every filter.
 - **Errors** global. **Audit** none. Rate class `read`.
 

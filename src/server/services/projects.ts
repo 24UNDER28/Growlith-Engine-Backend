@@ -41,6 +41,8 @@ export async function listProjects(input: {
     table: 'projects',
     query: input.query,
     allowedSorts: ['createdAt', 'startDate', 'targetDate'],
+    // H-2: targetDate is the deadline view — soonest deadline first.
+    ascendingKeys: ['targetDate'],
     apply: (q) => {
       let next = q;
       if (input.query.organizationId !== undefined) next = next.eq('organization_id', input.query.organizationId);
@@ -53,7 +55,6 @@ export async function listProjects(input: {
       }
       return next;
     },
-    keyOf: (row) => row.created_at,
   });
   return { data: page.data.map(toProjectDto), pagination: page.pagination };
 }
@@ -231,8 +232,9 @@ export async function listProjectMembers(input: {
       'id, organization_id, project_id, user_id, project_role, created_at, updated_at, deleted_at, deleted_by',
     query: input.query,
     allowedSorts: ['createdAt'],
+    // H-8: the project roster is join order — earliest member first.
+    ascendingKeys: ['createdAt'],
     apply: (q) => q.eq('project_id', input.projectId),
-    keyOf: (row) => row.created_at,
   });
   if (!staff) {
     return {
@@ -296,10 +298,21 @@ export async function patchProjectMember(input: {
   readonly auth: AuthContext;
   readonly request: Request;
   readonly requestId: string;
+  readonly projectId: string;
   readonly membershipId: string;
   readonly projectRole?: MemberRow['project_role'] | undefined;
   readonly allocationPct?: number | null | undefined;
 }): Promise<ProjectMembershipDto> {
+  // Object-scope check: `project:manage_members` is gated per project (an
+  // ADMIN must hold a LEAD membership in THIS project — the matrix's [P]
+  // qualifier), so the addressed membership must belong to the project named
+  // in the path. Without the check an ADMIN who leads project P could edit a
+  // membership row of project Q in the same organization by pairing Q's
+  // membershipId with P's path. Invisible-or-missing answers 404 (ADR-0019).
+  const existing = await loadLive<MemberRow>('project_memberships', input.membershipId);
+  if (existing.project_id !== input.projectId) {
+    throw ApiError.notFound();
+  }
   const patch: Record<string, unknown> = { updated_by: input.auth.userId };
   if (input.projectRole !== undefined) patch.project_role = input.projectRole;
   if (input.allocationPct !== undefined) patch.allocation_pct = input.allocationPct;
@@ -321,9 +334,15 @@ export async function removeProjectMember(input: {
   readonly auth: AuthContext;
   readonly request: Request;
   readonly requestId: string;
+  readonly projectId: string;
   readonly membershipId: string;
 }): Promise<void> {
+  // Same object-scope rule as patchProjectMember: the membership must belong
+  // to the project named in the path (see comment above).
   const row = await loadLive<MemberRow>('project_memberships', input.membershipId);
+  if (row.project_id !== input.projectId) {
+    throw ApiError.notFound();
+  }
   await softDeleteLive('project_memberships', input.membershipId, input.auth.userId);
   await recordMutation({
     action: 'SOFT_DELETE',

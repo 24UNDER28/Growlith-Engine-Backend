@@ -62,7 +62,6 @@ export async function listEngagements(input: {
       }
       return next;
     },
-    keyOf: (row) => row.created_at,
   });
   if (!staff) {
     return { data: page.data.map((row) => toEngagementDto(row, false)), pagination: page.pagination };

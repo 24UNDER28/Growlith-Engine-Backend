@@ -63,7 +63,6 @@ export async function listComments(input: {
       if (input.query.taskId !== undefined) next = next.eq('task_id', input.query.taskId);
       return next;
     },
-    keyOf: (row) => row.created_at,
   });
   return { data: page.data.map(toCommentDto), pagination: page.pagination };
 }

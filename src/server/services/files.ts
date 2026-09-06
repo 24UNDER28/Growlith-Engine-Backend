@@ -43,7 +43,6 @@ export async function listFiles(input: {
       if (input.query.reportId !== undefined) next = next.eq('report_id', input.query.reportId);
       return next;
     },
-    keyOf: (row) => row.created_at,
   });
   return { data: page.data.map(toFileDto), pagination: page.pagination };
 }
@@ -206,6 +205,22 @@ export async function patchFile(input: {
   const existing = await loadLive<Row>('files', input.id);
   if (input.auth.platformRole === null && existing.uploaded_by !== input.auth.userId) {
     throw ApiError.forbidden();
+  }
+  // L-6: `clientVisible` is not a field of the CLIENT PATCH contract. A
+  // client flipping its own upload to client-visible after its parent became
+  // visible would publish an internal-attachment to the whole client audience
+  // — the very flag the staff-only PATCH field exists to gate.
+  if (input.auth.platformRole === null && input.body.clientVisible !== undefined) {
+    throw ApiError.validation(
+      [
+        {
+          path: 'clientVisible',
+          code: 'custom',
+          message: 'clientVisible is not available in this request.',
+        },
+      ],
+      'The request failed validation.',
+    );
   }
   const patch: Record<string, unknown> = { updated_by: input.auth.userId };
   if (input.body.fileName !== undefined) patch.file_name = input.body.fileName;

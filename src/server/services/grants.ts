@@ -6,7 +6,7 @@ import { toPlatformGrantDto, type PlatformGrantDto } from '@/lib/dto/mappers';
 import { ApiError } from '@/server/api/errors';
 import { throwIfError } from '@/server/db/errors';
 import { callRpc, callRpcVoid } from '@/server/db/rpc';
-import { pageFromQuery, paginationMeta } from '@/server/api/page';
+import { assertKeysetPayloadForFilter, pageFromQuery, paginationMeta } from '@/server/api/page';
 import { createSupabaseServerClient } from '@/server/supabase/client-server';
 import type { Database } from '@/types/database';
 import type { PaginationQuery } from '@/lib/validation/pagination';
@@ -41,7 +41,25 @@ export async function listGrants(input: {
   if (input.query.role !== undefined) {
     q = q.eq('role', input.query.role as GrantRow['role']);
   }
-  if (page.cursor !== null && page.cursor.key !== null) {
+  if (page.cursor !== null) {
+    if (page.cursor.key === null) {
+      // granted_at is NOT NULL (granted with every grant), so a null key is
+      // always a forged cursor.
+      assertKeysetPayloadForFilter(page.cursor);
+      throw ApiError.validation(
+        [
+          {
+            path: 'cursor',
+            code: 'invalid_cursor',
+            message: 'cursor is not a cursor this system issued.',
+          },
+        ],
+        'The query string is invalid.',
+      );
+    }
+    // Values are embedded into an `or(...)` filter string; validate before
+    // interpolating (see assertKeysetPayloadForFilter).
+    assertKeysetPayloadForFilter(page.cursor);
     q = q.or(
       `granted_at.lt.${page.cursor.key},and(granted_at.eq.${page.cursor.key},id.lt.${page.cursor.id})`,
     );

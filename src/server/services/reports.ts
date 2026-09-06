@@ -44,7 +44,6 @@ export async function listReports(input: {
       }
       return next;
     },
-    keyOf: (row) => row.created_at,
   });
   return { data: page.data.map(toReportDto), pagination: page.pagination };
 }
@@ -296,6 +295,7 @@ export async function listMetrics(input: {
     table: 'metrics',
     query: input.query,
     live: false,
+    defaultSort: 'metricDate',
     allowedSorts: ['createdAt', 'metricDate'],
     apply: (q) => {
       let next = q;
@@ -308,7 +308,6 @@ export async function listMetrics(input: {
       if (input.query.to !== undefined) next = next.lte('metric_date', input.query.to);
       return next;
     },
-    keyOf: (row) => row.created_at,
   });
   return { data: page.data.map(toMetricDto), pagination: page.pagination };
 }

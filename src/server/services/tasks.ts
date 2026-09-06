@@ -34,6 +34,9 @@ export async function listTasks(input: {
     table: 'tasks',
     query: input.query,
     allowedSorts: ['createdAt', 'dueDate', 'position'],
+    // I-2: dueDate is the deadline view; position is the board order — both
+    // ascend (soonest due first; board position 1 first).
+    ascendingKeys: ['dueDate', 'position'],
     apply: (q) => {
       let next = q;
       if (input.query.organizationId !== undefined) next = next.eq('organization_id', input.query.organizationId);
@@ -45,7 +48,6 @@ export async function listTasks(input: {
       if (input.query.assigneeUserId !== undefined) next = next.eq('assignee_user_id', input.query.assigneeUserId);
       return next;
     },
-    keyOf: (row) => row.created_at,
   });
   return { data: page.data.map(toTaskDto), pagination: page.pagination };
 }

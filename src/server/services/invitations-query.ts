@@ -36,7 +36,8 @@ export async function listInvitations(input: {
     table: 'invitations',
     query: input.query,
     live: false,
-    allowedSorts: ['createdAt'],
+    allowedSorts: ['createdAt', 'expiresAt'],
+    ascendingKeys: ['expiresAt'],
     apply: (q) => {
       let next = q;
       if (input.query.organizationId !== undefined) {
@@ -50,7 +51,6 @@ export async function listInvitations(input: {
       }
       return next;
     },
-    keyOf: (row) => row.created_at,
   });
   return { data: page.data.map(toDto), pagination: page.pagination };
 }

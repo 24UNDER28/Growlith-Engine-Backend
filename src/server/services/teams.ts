@@ -57,6 +57,8 @@ export async function listTeamMemberships(input: {
     table: 'staff_team_memberships',
     query: input.query,
     allowedSorts: ['createdAt'],
+    // C-14: join order, earliest first.
+    ascendingKeys: ['createdAt'],
     apply: (q) => {
       let next = q;
       if (input.query.userId !== undefined) {
@@ -67,7 +69,6 @@ export async function listTeamMemberships(input: {
       }
       return next;
     },
-    keyOf: (row) => row.created_at,
   });
   return { data: page.data.map(toTeamMembershipDto), pagination: page.pagination };
 }

@@ -21,6 +21,7 @@ const PATCH = withRoute({
       auth,
       request,
       requestId,
+      projectId: params.id,
       membershipId: params.membershipId,
       projectRole: body.projectRole,
       allocationPct: body.allocationPct,
@@ -42,6 +43,7 @@ const DELETE = withRoute({
       auth,
       request,
       requestId,
+      projectId: params.id,
       membershipId: params.membershipId,
     });
   },

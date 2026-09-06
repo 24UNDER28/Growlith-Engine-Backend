@@ -35,6 +35,7 @@ import {
   moneyField,
   optionalTextField,
   organizationSlugField,
+  searchQueryField,
   textField,
   uuidField,
 } from '@/lib/validation/common';
@@ -60,7 +61,7 @@ export const projectMemberParamSchema = z
 export const grantIdParamSchema = z.object({ grantId: uuidField('grantId') }).strict();
 
 export const orgListQuerySchema = paginationQuerySchema.extend({
-  q: z.string().min(1).max(200).optional(),
+  q: searchQueryField('q').optional(),
   status: csvField(enumField('status', ORG_STATUSES)).optional(),
   region: csvField(enumField('region', REGION_CODES)).optional(),
 });
@@ -150,11 +151,12 @@ export const patchMeBodySchema = z
   .strict();
 
 export const usersListQuerySchema = paginationQuerySchema.extend({
-  q: z.string().min(1).max(200).optional(),
+  q: searchQueryField('q').optional(),
   organizationId: uuidField('organizationId').optional(),
   status: csvField(enumField('status', ['INVITED', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED'])).optional(),
   userType: enumField('userType', ['INTERNAL', 'CLIENT']).optional(),
   team: csvField(enumField('team', INTERNAL_TEAMS)).optional(),
+  ids: csvField(uuidField('ids'), 50).optional(),
 });
 
 export const membersListQuerySchema = paginationQuerySchema.extend({
@@ -474,7 +476,18 @@ export const createReportBodySchema = z
     currency: enumField('currency', CURRENCY_CODES).optional(),
     summaryMd: optionalTextField('summaryMd', 20_000),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    // K-1 validation: a report period must not run backwards. Both fields are
+    // calendar dates (YYYY-MM-DD), so lexicographic order is chronological.
+    if (value.periodEnd < value.periodStart) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['periodEnd'],
+        message: 'periodEnd must be on or after periodStart.',
+      });
+    }
+  });
 
 export const patchReportBodySchema = z
   .object({
