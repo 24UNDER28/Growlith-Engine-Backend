@@ -137,15 +137,15 @@ describe('performLogin — the happy path', () => {
 });
 
 describe('performLogin — credential failures', () => {
-  it('maps an unconfirmed address to 403 INVITATION_PENDING', async () => {
+  it('maps an unconfirmed address to uniform 401 (M-1 enumeration resistance)', async () => {
     scriptSignInError(new AuthApiError('Email not confirmed', 400, undefined));
 
     const error = await rejectionOf(performLogin(baseInput));
-    expect(error.status).toBe(403);
-    expect(error.code).toBe('INVITATION_PENDING');
+    expect(error.status).toBe(401);
+    expect(error.code).toBe('INVALID_CREDENTIALS');
   });
 
-  it('returns uniform 401 INVALID_CREDENTIALS for a wrong password and NEVER consults the profile store', async () => {
+  it('returns uniform 401 INVALID_CREDENTIALS for a wrong password and audits the failure (C-1)', async () => {
     const service = scriptProfiles({ account_status: 'ACTIVE' });
     scriptSignInError(new AuthApiError('Invalid login credentials', 400, undefined));
 
@@ -154,9 +154,11 @@ describe('performLogin — credential failures', () => {
     expect(error.status).toBe(401);
     expect(error.code).toBe('INVALID_CREDENTIALS');
     expect(error.message).toBe('The email address or password is incorrect.');
-    // Enumeration resistance: no database read happened for this address.
-    expect(service.spies.from).not.toHaveBeenCalled();
-    expect(audit).not.toHaveBeenCalled();
+    // C-1 hardening: failed credentials are audited when a profile is resolvable.
+    expect(service.spies.from).toHaveBeenCalled();
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'LOGIN_FAILED', after: { reason: 'invalid_credentials' } }),
+    );
   });
 
   it('maps rate limiting to 429', async () => {
@@ -175,23 +177,23 @@ describe('performLogin — credential failures', () => {
   });
 });
 
-describe('performLogin — the banned fork (profile rows decide, §8)', () => {
-  it('a banned identity with a SUSPENDED profile gets 423', async () => {
+describe('performLogin — the banned fork (M-1 uniform 401, holder check via status gate)', () => {
+  it('a banned identity with a SUSPENDED profile gets uniform 401 (pre-auth enumeration resistance)', async () => {
     scriptProfiles({ account_status: 'SUSPENDED' });
     scriptSignInError(new AuthApiError('User is banned', 400, undefined));
 
     const error = await rejectionOf(performLogin(baseInput));
-    expect(error.status).toBe(423);
-    expect(error.code).toBe('ACCOUNT_SUSPENDED');
+    expect(error.status).toBe(401);
+    expect(error.code).toBe('INVALID_CREDENTIALS');
   });
 
-  it('a banned identity with a DEACTIVATED profile gets 401 ACCOUNT_DEACTIVATED', async () => {
+  it('a banned identity with a DEACTIVATED profile gets uniform 401', async () => {
     scriptProfiles({ account_status: 'DEACTIVATED' });
     scriptSignInError(new AuthApiError('User is banned', 400, undefined));
 
     const error = await rejectionOf(performLogin(baseInput));
     expect(error.status).toBe(401);
-    expect(error.code).toBe('ACCOUNT_DEACTIVATED');
+    expect(error.code).toBe('INVALID_CREDENTIALS');
   });
 
   it('a banned identity with no profile row degrades to the uniform 401', async () => {

@@ -3,7 +3,7 @@ import 'server-only';
 import { z } from 'zod';
 
 import type { AuthContext } from '@/lib/auth/context';
-import type { Capability, PermissionQualifier } from '@/lib/domain/permissions';
+import { PERMISSION_MATRIX, type Capability, type PermissionQualifier } from '@/lib/domain/permissions';
 import type { EntityKind } from '@/lib/domain/entities';
 import type { PageResult } from '@/lib/types/pagination';
 import { authorize } from '@/server/auth/authorize';
@@ -15,6 +15,7 @@ import { ApiError, toApiError } from '@/server/api/errors';
 import { replayIdempotent, storeIdempotent } from '@/server/api/idempotency';
 import { requireAuthContext } from '@/server/auth/context';
 import { createLogger, type Logger } from '@/server/logging/logger';
+import { enforceRateLimit } from '@/server/api/rate-limit';
 
 /** Rate-limit class. Declared now; the limiter itself arrives in Phase 6. */
 export const RATE_CLASSES = ['auth', 'sensitive', 'mutation', 'read', 'export'] as const;
@@ -286,6 +287,13 @@ export function withRoute<
         throw ApiError.methodNotAllowed([definition.method]);
       }
 
+      // CSRF hardening (L-2): mutating methods must be same-origin when
+      // Origin or Sec-Fetch-Site is present. Cross-site form POSTs cannot set
+      // application/json (blocked by preflight), but this provides defense-in-depth
+      // for any future GET with side effects and for non-browser clients that
+      // might inadvertently be tricked.
+      assertSameOriginForMutations(request);
+
       // The three assertions below are sound by construction: `read*` returns
       // `undefined` only when the matching schema is absent, and when no schema
       // is declared the corresponding generic parameter defaults to `undefined`.
@@ -306,6 +314,42 @@ export function withRoute<
           ? await requireAuthContext(authz.minAal === 2 ? { minAal: 2 } : {})
           : undefined
       ) as TAuth extends 'required' ? AuthContext : undefined;
+
+      // ── Rate limiting (C-1) ────────────────────────────────────────────
+      // Enforced after authentication so the key can be userId when available,
+      // falling back to trusted IP for anonymous traffic (M-5). Body is
+      // included so auth-class limits can additionally bind to account email.
+      {
+        const rateClass =
+          authz.rateLimit?.class ?? (definition.method === 'GET' ? 'read' : 'mutation');
+        enforceRateLimit({
+          request,
+          rateClass,
+          route: `${definition.method} ${pathname}`,
+          actorUserId: (auth as AuthContext | undefined)?.userId ?? null,
+          body,
+          requestId,
+        });
+      }
+
+      // ── MFA step-up enforcement (C-2) ──────────────────────────────────
+      // Invert default: INTERNAL-only capabilities and sensitive internal
+      // mutations require aal2 unless explicitly exempted. This makes TOTP
+      // mandatory for privileged operations even when a route forgets to
+      // declare minAal. Exemptions are limited to the step-up flows themselves
+      // and self-service endpoints.
+      if (definition.auth === 'required' && auth !== undefined) {
+        const effectiveAalRequired = effectiveMinAalForRequest({
+          declared: authz.minAal,
+          capability: authz.capability as Capability | undefined,
+          method: definition.method,
+          pathname,
+          auth: auth as AuthContext,
+        });
+        if (effectiveAalRequired === 2 && (auth as AuthContext).aal !== 'aal2') {
+          throw ApiError.mfaRequired();
+        }
+      }
 
       // ── The authorization steps (Phase 4) ──────────────────────────────
       let obligations: readonly PermissionQualifier[] = [];
@@ -537,26 +581,18 @@ const BODY_TOO_LARGE_DETAIL = `The request body must not exceed ${MAX_JSON_BODY_
  * Reject an oversized body from its declared `Content-Length` **before** the
  * body is buffered into memory.
  *
- * The post-read check in `readBody` is authoritative but not protective: by the
- * time `Buffer.byteLength(text)` runs, the entire body is already resident in
- * the process heap. A 500 MB upload would be fully allocated and only then
- * rejected, so the limit would fail at precisely the moment it exists to help —
- * a memory-exhaustion vector rather than a guard against one.
+ * The streaming read in `readBody` is the authoritative guard for chunked bodies,
+ * but this pre-check makes ordinary oversized uploads cost nothing — they are
+ * rejected before any allocation.
  *
  * `Content-Length` is a client *declaration*, not a guarantee. It is absent for
- * `Transfer-Encoding: chunked`, and a hostile client may understate it. That is
- * why both checks are kept: this one is the cheap fast path that makes ordinary
- * oversized uploads cost nothing, and the post-read check is what actually binds
- * memory for a body that arrives without an honest length.
- *
- * A hard allocation ceiling for chunked bodies is an infrastructure concern, not
- * an application one — Node's header limits do not cover bodies. Tracked for
- * Phase 6 (security hardening) together with rate limiting.
+ * `Transfer-Encoding: chunked`, and a hostile client may understate it. The
+ * streaming read covers that case by aborting mid-transfer.
  */
 function assertDeclaredBodySizeWithinLimit(request: Request): void {
   const declared = request.headers.get('content-length');
   if (declared === null || declared === '') {
-    return; // Unknown length: the post-read check is the only option.
+    return; // Unknown length: the streaming read is the guard.
   }
 
   const bytes = Number(declared);
@@ -570,6 +606,69 @@ function assertDeclaredBodySizeWithinLimit(request: Request): void {
   }
 }
 
+/**
+ * Read the request body through a counting stream, aborting at MAX_JSON_BODY_BYTES
+ * *during* transfer (H-2 hardening). This prevents chunked bodies from being
+ * fully buffered before rejection — an unauthenticated memory DoS.
+ */
+async function readBodyText(request: Request): Promise<string> {
+  // No body stream (e.g., GET or already consumed) — fallback to text().
+  if (request.body === null || request.body === undefined) {
+    const text = await request.text();
+    if (Buffer.byteLength(text, 'utf8') > MAX_JSON_BODY_BYTES) {
+      throw ApiError.payloadTooLarge(BODY_TOO_LARGE_DETAIL);
+    }
+    return text;
+  }
+  const reader = request.body.getReader();
+  let total = 0;
+  const chunks: Uint8Array[] = [];
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        total += value.byteLength;
+        if (total > MAX_JSON_BODY_BYTES) {
+          try {
+            await reader.cancel();
+          } catch {
+            // ignore cancel error
+          }
+          throw ApiError.payloadTooLarge(BODY_TOO_LARGE_DETAIL);
+        }
+        chunks.push(value);
+      }
+    }
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    // If streaming fails (e.g., body locked), try text() as fallback.
+    // This still enforces the limit via Buffer.byteLength.
+    try {
+      const fallback = await request.text();
+      if (Buffer.byteLength(fallback, 'utf8') > MAX_JSON_BODY_BYTES) {
+        throw ApiError.payloadTooLarge(BODY_TOO_LARGE_DETAIL);
+      }
+      return fallback;
+    } catch (fallbackError) {
+      if (fallbackError instanceof ApiError) throw fallbackError;
+      throw error;
+    }
+  }
+  if (chunks.length === 0) {
+    return '';
+  }
+  const combined = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(combined);
+}
+
 async function readBody<TBody>(
   schema: z.ZodType<TBody> | undefined,
   request: Request,
@@ -580,7 +679,7 @@ async function readBody<TBody>(
 
   assertDeclaredBodySizeWithinLimit(request);
 
-  const text = await request.text();
+  const text = await readBodyText(request);
 
   if (text.length === 0) {
     throw ApiError.badRequest('A JSON request body is required.');
@@ -670,4 +769,137 @@ function safePathname(url: string): string {
   } catch {
     return url;
   }
+}
+
+function assertSameOriginForMutations(request: Request): void {
+  const method = request.method.toUpperCase();
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    return;
+  }
+  const origin = request.headers.get('origin');
+  const secFetchSite = request.headers.get('sec-fetch-site');
+  if (origin !== null && origin !== '') {
+    try {
+      const originUrl = new URL(origin);
+      const requestUrl = new URL(request.url);
+      if (originUrl.host !== requestUrl.host) {
+        throw ApiError.forbidden();
+      }
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      // Malformed Origin — treat as untrusted
+      throw ApiError.forbidden();
+    }
+  }
+  if (secFetchSite !== null && secFetchSite !== '') {
+    const normalized = secFetchSite.toLowerCase();
+    if (normalized === 'cross-site') {
+      throw ApiError.forbidden();
+    }
+  }
+}
+
+/* ────────────────────────── MFA step-up helpers (C-2) ───────────────────────── */
+
+/**
+ * Whether the capability is INTERNAL-only (no client role holds it).
+ */
+function isInternalOnlyCapability(capability: Capability): boolean {
+  const separator = capability.indexOf(':');
+  if (separator === -1) return false;
+  const resource = capability.slice(0, separator) as keyof typeof PERMISSION_MATRIX.SUPER_ADMIN;
+  const action = capability.slice(separator + 1) as string;
+  // Type-safe access via matrix
+  const anyMatrix = PERMISSION_MATRIX as unknown as Record<string, Record<string, Record<string, { kind: string }>>>;
+  const superAllow = anyMatrix.SUPER_ADMIN?.[resource]?.[action]?.kind === 'ALLOW';
+  const adminAllow = anyMatrix.ADMIN?.[resource]?.[action]?.kind === 'ALLOW';
+  const clientAdminAllow = anyMatrix.CLIENT_ADMIN?.[resource]?.[action]?.kind === 'ALLOW';
+  const clientMemberAllow = anyMatrix.CLIENT_MEMBER?.[resource]?.[action]?.kind === 'ALLOW';
+  return (superAllow || adminAllow) && !clientAdminAllow && !clientMemberAllow;
+}
+
+/**
+ * Effective minAal for a request (C-2 hardening).
+ *
+ * Invert default: INTERNAL-only capabilities and sensitive internal mutations
+ * require aal2 unless explicitly exempted. Only INTERNAL actors are affected
+ * — CLIENT flows remain aal1.
+ */
+function effectiveMinAalForRequest(input: {
+  readonly declared: 1 | 2 | undefined;
+  readonly capability: Capability | undefined;
+  readonly method: HttpMethod;
+  readonly pathname: string;
+  readonly auth: AuthContext;
+}): 1 | 2 | undefined {
+  // Explicit declaration wins — including explicit `1` to exempt.
+  if (input.declared !== undefined) {
+    return input.declared;
+  }
+  // Only INTERNAL staff are subject to step-up
+  if (input.auth.userType !== 'INTERNAL') {
+    return undefined;
+  }
+  // Exemptions: the step-up flows themselves and self-service
+  const exemptPaths = [
+    '/api/v1/auth/mfa/enroll',
+    '/api/v1/auth/mfa/challenge',
+    '/api/v1/auth/mfa/factors',
+    '/api/v1/auth/mfa/unenroll',
+    '/api/v1/auth/password',
+    '/api/v1/me',
+  ];
+  if (exemptPaths.some((prefix) => input.pathname === prefix || input.pathname.startsWith(prefix + '/') || input.pathname.startsWith(prefix + '?'))) {
+    return undefined;
+  }
+  // More precise: exact match for known exempt routes
+  if (
+    input.pathname === '/api/v1/auth/mfa/enroll' ||
+    input.pathname === '/api/v1/auth/mfa/challenge' ||
+    input.pathname === '/api/v1/auth/mfa/factors' ||
+    input.pathname === '/api/v1/auth/password' ||
+    input.pathname.startsWith('/api/v1/me')
+  ) {
+    return undefined;
+  }
+
+  if (input.capability === undefined) {
+    return undefined;
+  }
+
+  // INTERNAL-only capabilities always require aal2 (even reads — admin surfaces)
+  if (isInternalOnlyCapability(input.capability)) {
+    return 2;
+  }
+
+  // Sensitive mutations for INTERNAL: any non-GET on sensitive resources
+  if (input.method !== 'GET') {
+    const resource = input.capability.split(':')[0] ?? '';
+    const sensitiveResources = new Set([
+      'organization',
+      'invitation',
+      'user',
+      'engagement',
+      'service',
+      'project',
+      'project_membership',
+      'task',
+      'deliverable',
+      'report',
+      'team_membership',
+      'platform_grant',
+      'membership',
+      'activity',
+    ]);
+    if (sensitiveResources.has(resource)) {
+      return 2;
+    }
+  }
+
+  // Any /api/v1/admin/** path requires aal2
+  if (input.pathname.startsWith('/api/v1/admin')) {
+    return 2;
+  }
+
+  return undefined;
 }

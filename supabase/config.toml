@@ -15,8 +15,8 @@
 #     layer — §6c — the auth server just permits it);
 #   - minimum password length 12; the password POLICY lives here, never in
 #     application code;
-#   - mail-OTP expiry 7 days, matching `invitations.expires_at`
-#     (verify-at-implementation note below);
+#   - mail-OTP expiry 1 hour (Phase 6 hardening: recovery links are now short-lived;
+#     invitation lifetime is enforced by the app's invitations.expires_at column);
 #   - redirect allow-list contains exactly the confirm-route pattern.
 #
 # VERIFY-AT-IMPLEMENTATION (ADR-0022 evidence rule; could not be executed in
@@ -27,11 +27,9 @@
 # behaviours to verify against the pinned GoTrue:
 #   1. a second `inviteUserByEmail` for an UNCONFIRMED user re-sends the
 #      invite (the re-issue path depends on it);
-#   2. GoTrue has ONE mail-OTP expiry for every email type. It is set to 7
-#      days so invite links live as long as the invitation row; recovery links
-#      therefore also live 7 days rather than the design's 1 hour. The app
-#      token in the invitation row is unaffected, and the residual (long-lived
-#      recovery links) is recorded for the Phase 6 security pass.
+#   2. GoTrue has ONE mail-OTP expiry for every email type. Phase 6 sets it to
+#      1 hour so recovery links are short-lived; invitation lifetime is enforced
+#      by the app's invitations.expires_at column, not GoTrue's OTP window.
 
 project_id = "growlith-engine"
 
@@ -77,8 +75,9 @@ double_confirm_changes = true
 secure_password_change = true
 max_frequency = "30s"
 otp_length = 6
-# 7 days — the invite window (see the verify-at-implementation note above).
-otp_expiry = 604800
+# 1 hour — recovery links are short-lived (Phase 6 hardening M-4); invitation
+# lifetime is enforced by invitations.expires_at, not GoTrue.
+otp_expiry = 3600
 
 [auth.email.template.invitation]
 subject = "Your invitation to Growlith Engine"

@@ -130,20 +130,56 @@ export async function recordAuthEvent(input: RecordAuthEventInput): Promise<bool
 }
 
 /**
- * First hop of `x-forwarded-for`, when it looks like an IP. Recorded as
- * `actor_ip` (inet); a proxy-supplied junk value is dropped rather than
- * trusted into the column.
+ * Trusted IP extraction (M-5 hardening).
+ *
+ * The first hop of X-Forwarded-For is client-controlled and must NOT be trusted.
+ * The deployment's edge proxy is the only writer that may append the real client
+ * IP. We therefore:
+ *   1. Prefer `x-real-ip` when present (set by trusted proxy, single value).
+ *   2. Otherwise take the LAST entry of `x-forwarded-for` — the hop our proxy
+ *      appended — not the first.
+ *   3. Fall back to `cf-connecting-ip` / `x-vercel-forwarded-for` if present.
+ *
+ * A proxy-supplied junk value is dropped rather than trusted into the column.
+ * Deployment must ensure the edge overwrites or appends, never blindly forwards
+ * a client-supplied XFF as the trusted value (documented proxy contract).
  */
-function extractActorIp(request: Request | undefined): string | null {
+export function extractActorIp(request: Request | undefined): string | null {
   if (request === undefined) {
     return null;
   }
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded === null) {
-    return null;
+  // 1. Direct trusted headers (single IP, set by edge)
+  const trustedSingleHeaders = ['x-real-ip', 'cf-connecting-ip', 'x-vercel-forwarded-for'];
+  for (const header of trustedSingleHeaders) {
+    const value = request.headers.get(header)?.trim();
+    if (value !== null && value !== undefined && value.length > 0) {
+      // These headers should contain a single IP; if they contain a list, take last.
+      const candidate = value.split(',').at(-1)?.trim() ?? value;
+      if (IP_LIKE.test(candidate)) {
+        return candidate;
+      }
+    }
   }
-  const first = forwarded.split(',')[0]?.trim() ?? '';
-  return IP_LIKE.test(first) ? first : null;
+  // 2. X-Forwarded-For: take the LAST entry (proxy-appended), not the first.
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded !== null) {
+    const parts = forwarded
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+    const last = parts.at(-1) ?? '';
+    if (IP_LIKE.test(last)) {
+      return last;
+    }
+    // If last is not IP-like, try to find any IP-like entry from the end.
+    for (let idx = parts.length - 1; idx >= 0; idx -= 1) {
+      const candidate = parts[idx] ?? '';
+      if (IP_LIKE.test(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  return null;
 }
 
 const IP_LIKE = /^[0-9a-fA-F.:]{3,45}$/;

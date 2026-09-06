@@ -64,7 +64,7 @@ export async function performLogin(input: {
   });
 
   if (error !== null || data.user === null) {
-    throw await mapSignInError(error, input.body.email, log);
+    throw await mapSignInError(error, input.body.email, log, input.request, input.requestId);
   }
 
   const authUserId = data.user.id;
@@ -121,72 +121,160 @@ export async function performLogin(input: {
 /**
  * Map a GoTrue sign-in error to the public contract.
  *
- * ENUMERATION RESISTANCE (§3, §12): unknown email and wrong password are the
- * same `401 INVALID_CREDENTIALS`, byte for byte. The states that differ
- * (`Email not confirmed`, banned) are states only the REAL account holder can
- * be in: reaching them requires an address that exists AND (for banned) is
- * matched in our profile store — never a password guess.
+ * ENUMERATION RESISTANCE (M-1 hardening): ALL credential failures return
+ * byte-identical `401 INVALID_CREDENTIALS`. Differentiated states (invited,
+ * banned) are available only to the authenticated holder via the status gate
+ * (which requires correct password) — never to an unauthenticated guess.
+ * Failed attempts are audited (when a profile is resolvable) and logged with
+ * redacted context (C-1).
  */
-async function mapSignInError(error: unknown, email: string, log: Logger): Promise<ApiError> {
+async function mapSignInError(
+  error: unknown,
+  email: string,
+  log: Logger,
+  request: Request,
+  requestId: string,
+): Promise<ApiError> {
   if (error === null || error === undefined) {
+    await auditFailedCredential(email, 'invalid_credentials', request, requestId, log);
     return ApiError.invalidCredentials();
   }
 
   const message = error instanceof Error ? error.message : String(error);
 
-  // Invited-but-never-accepted identities are unconfirmed at the auth server;
-  // GoTrue refuses them before any session exists. This is precisely the
-  // INVITED row of the §3 table.
   if (/email not confirmed/i.test(message)) {
-    return ApiError.invitationPending('This account has not accepted its invitation yet.');
+    // Uniform response (M-1): do not reveal invitation state to unauthenticated caller.
+    await auditFailedCredential(email, 'invalid_credentials', request, requestId, log);
+    return ApiError.invalidCredentials('The email address or password is incorrect.', error);
   }
 
   if (isAuthApiError(error) && error.status === 429) {
+    await auditFailedCredential(email, 'rate_limited', request, requestId, log);
     return ApiError.tooManyRequests('Too many sign-in attempts. Please retry later.');
   }
 
   if (/banned/i.test(message)) {
-    return await resolveBannedStatus(email, log);
+    // Uniform response (M-1): banned is checked before password, so any guess
+    // would otherwise reveal suspended/deactivated accounts.
+    await auditFailedCredential(email, 'banned_attempt', request, requestId, log);
+    // Still attempt to resolve for audit, but response is uniform.
+    await resolveBannedStatusForAudit(email, log, request, requestId);
+    return ApiError.invalidCredentials('The email address or password is incorrect.', error);
   }
 
   if (error instanceof AuthRetryableFetchError || (isAuthApiError(error) && error.status >= 500)) {
+    log.warn('login failed — auth service unavailable', { reason: error.message });
     return ApiError.serviceUnavailable('The authentication service is temporarily unavailable.');
   }
 
   // Uniform failure for unknown address, wrong password and everything else a
   // caller should not be able to distinguish.
+  await auditFailedCredential(email, 'invalid_credentials', request, requestId, log);
   return ApiError.invalidCredentials('The email address or password is incorrect.', error);
 }
 
 /**
- * A banned identity is either SUSPENDED (423) or DEACTIVATED (401 with the
- * named code). The profile row — not the auth server — says which (§8).
+ * Audit a failed credential attempt. When a profile exists for the email,
+ * write a LOGIN_FAILED audit row; otherwise log a redacted warning (no synthetic subject).
  */
-async function resolveBannedStatus(email: string, log: Logger): Promise<ApiError> {
+async function auditFailedCredential(
+  email: string,
+  reason: string,
+  request: Request,
+  requestId: string,
+  log: Logger,
+): Promise<void> {
+  const normalized = email.trim().toLowerCase();
+  try {
+    const { data, error } = await getSupabaseServiceClient()
+      .from('profiles')
+      .select('id')
+      .eq('email', normalized)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (error !== null) {
+      log.warn('login failed', { reason });
+      return;
+    }
+    if (data !== null) {
+      await recordAuthEvent({
+        action: 'LOGIN_FAILED',
+        severity: 'WARNING',
+        entityId: data.id,
+        actorUserId: data.id,
+        requestId,
+        request,
+        after: { reason },
+        reason: 'credential verification failed',
+      });
+      log.warn('login failed', { reason, userId: data.id });
+      return;
+    }
+    // No profile — redacted log only (audit requires UUID entity_id)
+    log.warn('login failed', { reason });
+  } catch (cause) {
+    log.warn('login failed', {
+      reason,
+      auditError: cause instanceof Error ? cause.message : String(cause),
+    });
+  }
+}
+
+/**
+ * Resolve banned status for audit only (response is uniform). Kept for audit
+ * trail completeness; does not affect the error returned to the caller.
+ */
+async function resolveBannedStatusForAudit(
+  email: string,
+  log: Logger,
+  request: Request,
+  requestId: string,
+): Promise<void> {
   try {
     const { data, error } = await getSupabaseServiceClient()
       .from('profiles')
       .select('id, account_status')
-      .eq('email', email)
+      .eq('email', email.trim().toLowerCase())
       .is('deleted_at', null)
       .maybeSingle();
 
-    if (error === null && data !== null) {
-      if (data.account_status === 'SUSPENDED') {
-        return ApiError.accountSuspended();
-      }
-      if (data.account_status === 'DEACTIVATED') {
-        return ApiError.accountDeactivated();
-      }
-    }
     if (error !== null) {
       log.warn('banned-sign-in status lookup failed', { reason: error.message });
+      return;
+    }
+    if (data !== null) {
+      // Audit already written via auditFailedCredential; this enriches log only.
+      log.warn('banned sign-in attempt', { accountStatus: data.account_status });
+      // Also emit a detailed audit with account_state for forensics (still not disclosed to caller).
+      await recordAuthEvent({
+        action: 'LOGIN_FAILED',
+        severity: 'WARNING',
+        entityId: data.id,
+        actorUserId: data.id,
+        requestId,
+        request,
+        after: { reason: 'account_state', status: data.account_status },
+        reason: 'banned identity attempted sign-in',
+      });
     }
   } catch (cause) {
     log.warn('banned-sign-in status lookup threw', {
       reason: cause instanceof Error ? cause.message : String(cause),
     });
   }
+}
+
+/**
+ * Legacy export kept for tests that may import it; now uniform (always invalid credentials).
+ * @deprecated Use resolveBannedStatusForAudit for audit-only path.
+ */
+/**
+ * @deprecated Use resolveBannedStatusForAudit for audit-only path.
+ */
+export async function resolveBannedStatus(_email: string, _log: Logger): Promise<ApiError> {
+  void _email;
+  void _log;
+  // Uniform response: never leak suspended/deactivated via pre-auth error.
   return ApiError.invalidCredentials();
 }
 

@@ -32,19 +32,59 @@ export async function replayIdempotent(input: {
   const requestHash = hashRequest(input.request, input.body);
   const service = getSupabaseServiceClient();
 
-  const { data, error } = await service
+  const { data, error } = (await (service as unknown as { from: (t: string) => { select: (c: string) => { eq: (...a: unknown[]) => { eq: (...a: unknown[]) => { eq: (...a: unknown[]) => { maybeSingle: () => Promise<{ data: unknown; error: unknown }> } } } } } })
     .from('idempotency_keys')
-    .select('request_hash, status_code, response_body, response_headers')
+    .select('request_hash, status_code, response_body, response_headers, created_at, expires_at')
     .eq('actor_user_id', input.actorUserId)
     .eq('route', input.route)
     .eq('key', key)
-    .maybeSingle();
+    .maybeSingle()) as unknown as {
+    data: {
+      request_hash: string;
+      status_code: number;
+      response_body: unknown;
+      response_headers: unknown;
+      created_at?: string | null;
+      expires_at?: string | null;
+    } | null;
+    error: { message: string; code?: string } | null;
+  };
 
   if (error !== null) {
     throw ApiError.serviceUnavailable('The idempotency store could not be read.');
   }
   if (data === null) {
     return { kind: 'fresh', key };
+  }
+  // L-4: TTL — expired keys are not replayed (24h window). Treat as fresh and lazily delete.
+  const expiresAt = (data as { expires_at?: string | null }).expires_at ?? null;
+  if (expiresAt !== null) {
+    const expiresMs = Date.parse(expiresAt);
+    if (!Number.isNaN(expiresMs) && expiresMs < Date.now()) {
+      // Best-effort delete expired row so the key can be reused.
+      void service
+        .from('idempotency_keys')
+        .delete()
+        .eq('actor_user_id', input.actorUserId)
+        .eq('route', input.route)
+        .eq('key', key);
+      return { kind: 'fresh', key };
+    }
+  } else {
+    // Fallback: legacy rows without expires_at — apply 24h from created_at
+    const createdAt = (data as { created_at?: string | null }).created_at ?? null;
+    if (createdAt !== null) {
+      const createdMs = Date.parse(createdAt);
+      if (!Number.isNaN(createdMs) && Date.now() - createdMs > 24 * 60 * 60 * 1000) {
+        void service
+          .from('idempotency_keys')
+          .delete()
+          .eq('actor_user_id', input.actorUserId)
+          .eq('route', input.route)
+          .eq('key', key);
+        return { kind: 'fresh', key };
+      }
+    }
   }
   if (data.request_hash !== requestHash) {
     throw ApiError.conflict(
@@ -89,7 +129,8 @@ export async function storeIdempotent(input: {
     status_code: input.status,
     response_body: input.payload as never,
     response_headers: input.headers as never,
-  });
+    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  } as never);
   if (error !== null) {
     // A racing first-write is fine: the unique PK means the other request won.
     // Any other failure is logged; the mutation already happened, so we do not
@@ -118,6 +159,7 @@ function hashRequest(request: Request, body: unknown): string {
   const canonical = JSON.stringify({
     method: request.method,
     pathname: safePath(request.url),
+    search: safeSearch(request.url),
     body: body ?? null,
   });
   return createHash('sha256').update(canonical).digest('hex');
@@ -128,5 +170,13 @@ function safePath(url: string): string {
     return new URL(url).pathname;
   } catch {
     return url;
+  }
+}
+
+function safeSearch(url: string): string {
+  try {
+    return new URL(url).search;
+  } catch {
+    return '';
   }
 }

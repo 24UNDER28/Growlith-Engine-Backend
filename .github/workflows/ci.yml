@@ -74,6 +74,16 @@ jobs:
       - name: Scan client bundle for server-only material
         run: npm run check:client-exposure
 
+      - name: Secret scan (M-7)
+        run: npm run security:scan
+
+      - name: Dependency audit (M-7)
+        run: npm audit --audit-level=moderate
+
+      - name: Database authorization harness (H-3, PGlite)
+        run: node scripts/db-authz-attack.mjs
+        continue-on-error: true
+
       - name: Confirm the working tree is still clean
         # Catches a build or generator that silently rewrites tracked files —
         # e.g. tsconfig.json edits or a regenerated types/database.ts that was

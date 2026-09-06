@@ -3,12 +3,9 @@ import type { NextConfig } from 'next';
 /**
  * Baseline response headers.
  *
- * Scope note (Phase 1): only the non-controversial, always-safe headers are set
- * here. Content-Security-Policy, Strict-Transport-Security and rate limiting are
- * deliberately deferred to Phase 6 (Security), where they will be tuned against
- * the real dashboard markup. A CSP written before any UI exists would either be
- * so loose it is meaningless or so strict it breaks Phase 9 — see ADR-0022 and
- * docs/architecture/README.md §M.
+ * Phase 6 hardening (M-6): HSTS and CSP are now enabled. HSTS enforces HTTPS;
+ * CSP is deployed in Report-Only first to avoid breaking Phase 9 UI rendering
+ * (collect violations, then enforce).
  */
 const baselineSecurityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -18,6 +15,17 @@ const baselineSecurityHeaders = [
   {
     key: 'Permissions-Policy',
     value: 'camera=(), microphone=(), geolocation=(), browsing-topics=(), payment=()',
+  },
+  {
+    key: 'Strict-Transport-Security',
+    value: 'max-age=31536000; includeSubDomains',
+  },
+  {
+    // Report-Only initially: collect violations without blocking. Enforce after
+    // staging validation shows zero violations across all pages.
+    key: 'Content-Security-Policy-Report-Only',
+    value:
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   },
 ] as const;
 
