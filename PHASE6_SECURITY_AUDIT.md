@@ -37,21 +37,21 @@ Static review of 100% of the attack surface plus tooling checks:
 
 ### Controls verified sound (no finding raised)
 
-| Area | Verdict |
-| --- | --- |
-| Authorization layering (`can()`: parse → AAL2 → ACTIVE → role → matrix → tenant-reach 404 → SELF → ADMIN-LEAD) | Correct; 404 (not 403) on unreachable tenants prevents existence leaks |
-| RLS predicates | `auth_platform_role()` honors `revoked_at`/`expires_at`/account status; `has_org_access()` requires ACTIVE membership + ACTIVE account; NULL-safe variants (160800); `platform_role_grants` has **no policies = deny-all** to user JWTs; `idempotency_keys` FORCE RLS service-only |
-| Column grants | DELETE revoked from `authenticated` everywhere (122300); commercial columns (`contract_value`, `fee*`, `allocation_pct`, `notes_internal`, `token_hash`, `phone`…) revoked from ALL authenticated; staff reads via service client keyed by IDs already visible through user-JWT RLS (`enrich.ts`) — no oracle |
-| Storage RLS | SELECT via definer `can_read_storage_object()` joining `files.client_visible` + `scan_status='CLEAN'`; INSERT tenancy-checked; signed download URLs 60 s; `files_storage_object_key` UNIQUE prevents path-squatting |
-| Mass assignment | Every body/param/query schema `.strict()`; `user_metadata` never trusted; capability routes match the Phase-5 matrix with no drift found |
-| Injection | PostgREST filter values library-encoded; `searchQueryField` blocks `or()`-grammar chars; cursors shape-validated (UUID fields) → tampered cursor = 400, not injection; SQL only in migrations/RPCs (pinned `search_path`, definer, re-reads in-txn) |
-| XSS | Zero `dangerouslySetInnerHTML`/`innerHTML`/`eval` sinks; email templates interpolate only GoTrue's `{{ .ConfirmationURL }}`; error pages render digest only, never `error.message` |
-| Secrets | No service-role key anywhere in client-reachable code; CI runs fail-closed bundle exposure scan; `.env*` gitignored; seed uses RFC-2606 synthetic data; no secrets in SQL/CI/scripts |
-| Session architecture | Server-only httpOnly cookies (ADR-0026); no browser Supabase client; `getSession()` banned by architecture test, `getUser()` network verification at every decision; refresh rotation + 10 s reuse detection; global logout; suspension → revoke + GoTrue ban; open-redirect guard `safeNextPath`; invitation tokens 32-byte CSPRNG, SHA-256-at-rest, single-use, mailbox-bound |
-| Error handling / logging | SQLSTATE-only mapping, generic 500s (ADR-0025); audit fail-closed (503); redaction strips JWTs/`sb_secret_`/connstrings, masks emails; `x-request-id` canonical-UUID enforced |
-| Privileged RPCs | Last-SUPER_ADMIN lockout floors (revoke/erase/member removal); org archive needs AAL2 + slug confirmation; purge gated by GUC + SUPER_ADMIN; erase tombstones |
-| Dependencies | `npm audit` clean at pinned versions (next 16.3.4, @supabase/ssr 0.12.6, supabase-js 2.115.0, react 19.2.8, zod 4.5.4) |
-| CORS/config | No CORS headers (ADR-0014, same-origin only); signup disabled; min password 12; redirect allow-list is exactly `/auth/confirm`; `double_confirm_changes` + `secure_password_change` on; `max_rows=1000`; baseline headers (nosniff, XFO DENY, Referrer-Policy, Permissions-Policy, no-store on /api/*) present |
+| Area                                                                                                           | Verdict                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authorization layering (`can()`: parse → AAL2 → ACTIVE → role → matrix → tenant-reach 404 → SELF → ADMIN-LEAD) | Correct; 404 (not 403) on unreachable tenants prevents existence leaks                                                                                                                                                                                                                                                                                                          |
+| RLS predicates                                                                                                 | `auth_platform_role()` honors `revoked_at`/`expires_at`/account status; `has_org_access()` requires ACTIVE membership + ACTIVE account; NULL-safe variants (160800); `platform_role_grants` has **no policies = deny-all** to user JWTs; `idempotency_keys` FORCE RLS service-only                                                                                              |
+| Column grants                                                                                                  | DELETE revoked from `authenticated` everywhere (122300); commercial columns (`contract_value`, `fee*`, `allocation_pct`, `notes_internal`, `token_hash`, `phone`…) revoked from ALL authenticated; staff reads via service client keyed by IDs already visible through user-JWT RLS (`enrich.ts`) — no oracle                                                                   |
+| Storage RLS                                                                                                    | SELECT via definer `can_read_storage_object()` joining `files.client_visible` + `scan_status='CLEAN'`; INSERT tenancy-checked; signed download URLs 60 s; `files_storage_object_key` UNIQUE prevents path-squatting                                                                                                                                                             |
+| Mass assignment                                                                                                | Every body/param/query schema `.strict()`; `user_metadata` never trusted; capability routes match the Phase-5 matrix with no drift found                                                                                                                                                                                                                                        |
+| Injection                                                                                                      | PostgREST filter values library-encoded; `searchQueryField` blocks `or()`-grammar chars; cursors shape-validated (UUID fields) → tampered cursor = 400, not injection; SQL only in migrations/RPCs (pinned `search_path`, definer, re-reads in-txn)                                                                                                                             |
+| XSS                                                                                                            | Zero `dangerouslySetInnerHTML`/`innerHTML`/`eval` sinks; email templates interpolate only GoTrue's `{{ .ConfirmationURL }}`; error pages render digest only, never `error.message`                                                                                                                                                                                              |
+| Secrets                                                                                                        | No service-role key anywhere in client-reachable code; CI runs fail-closed bundle exposure scan; `.env*` gitignored; seed uses RFC-2606 synthetic data; no secrets in SQL/CI/scripts                                                                                                                                                                                            |
+| Session architecture                                                                                           | Server-only httpOnly cookies (ADR-0026); no browser Supabase client; `getSession()` banned by architecture test, `getUser()` network verification at every decision; refresh rotation + 10 s reuse detection; global logout; suspension → revoke + GoTrue ban; open-redirect guard `safeNextPath`; invitation tokens 32-byte CSPRNG, SHA-256-at-rest, single-use, mailbox-bound |
+| Error handling / logging                                                                                       | SQLSTATE-only mapping, generic 500s (ADR-0025); audit fail-closed (503); redaction strips JWTs/`sb_secret_`/connstrings, masks emails; `x-request-id` canonical-UUID enforced                                                                                                                                                                                                   |
+| Privileged RPCs                                                                                                | Last-SUPER_ADMIN lockout floors (revoke/erase/member removal); org archive needs AAL2 + slug confirmation; purge gated by GUC + SUPER_ADMIN; erase tombstones                                                                                                                                                                                                                   |
+| Dependencies                                                                                                   | `npm audit` clean at pinned versions (next 16.3.4, @supabase/ssr 0.12.6, supabase-js 2.115.0, react 19.2.8, zod 4.5.4)                                                                                                                                                                                                                                                          |
+| CORS/config                                                                                                    | No CORS headers (ADR-0014, same-origin only); signup disabled; min password 12; redirect allow-list is exactly `/auth/confirm`; `double_confirm_changes` + `secure_password_change` on; `max_rows=1000`; baseline headers (nosniff, XFO DENY, Referrer-Policy, Permissions-Policy, no-store on /api/*) present                                                                  |
 
 ---
 
@@ -63,7 +63,7 @@ Static review of 100% of the attack surface plus tooling checks:
   metadata-only (it reaches logs/audit, never a limiter); no 429 is ever produced by the
   application (only GoTrue's 429 is mapped through). Simultaneously, a wrong-password
   login writes **no audit row and no log line**: `LOGIN_FAILED` is recorded only when a
-  *successful* sign-in is rejected by the status gate (`routes-login.ts:79–92`), and
+  _successful_ sign-in is rejected by the status gate (`routes-login.ts:79–92`), and
   `mapSignInError()` returns without logging. `audit.ts:29` claims failed attempts are a
   "redacted structured log" — that log does not exist. Failed MFA verifications are
   likewise unlogged.
@@ -77,7 +77,7 @@ Static review of 100% of the attack surface plus tooling checks:
   TOTP codes can be sprayed against `POST /auth/mfa/challenge` at app-unlimited rate.
   (c) Availability: every GoTrue call originates from the **one server IP**, so GoTrue's
   IP-keyed limits (e.g. token/verify 30–150/h) form a single global bucket — an attacker
-  deliberately exhausting it 429s *every legitimate user's* login/OTP platform-wide.
+  deliberately exhausting it 429s _every legitimate user's_ login/OTP platform-wide.
 - **Impact:** Account takeover where passwords are weak/reused; undetectable brute force
   (no forensic trail); MFA weakened to GoTrue's shared-IP attempt budget; trivial
   auth-plane denial of service.
@@ -102,7 +102,7 @@ Static review of 100% of the attack surface plus tooling checks:
   engagement PATCH (contract values), teams + team-memberships admin, all
   project/task/deliverable/report mutations. `routes-login.ts:94–95` asserts "every
   protected surface rejects it until the challenge completes" — false for the API, which
-  is the *only* authoritative surface today (pages are Phase 9, and the repo's own doctrine
+  is the _only_ authoritative surface today (pages are Phase 9, and the repo's own doctrine
   says UI guards are UX, never security). Design §6c/§13.8 and the `with-route` doc
   ("`/admin` surfaces require aal2") contradict the implementation.
 - **Affected area:** `with-route.ts` (per-route opt-in `minAal`), all staff-facing route
@@ -113,7 +113,7 @@ Static review of 100% of the attack surface plus tooling checks:
   the challenge — drives the entire admin API with cookies alone: deactivate arbitrary
   users, flip organization status, alter engagement `contract_value`, revoke client
   invitations, manage team memberships, publish reports. TOTP is never presented. A stolen
-  aal1 cookie is also *durable*: refresh rotation keeps renewing it indefinitely.
+  aal1 cookie is also _durable_: refresh rotation keeps renewing it indefinitely.
 - **Impact:** Defeats the platform's flagship administrative control (mandatory TOTP for
   SUPER_ADMIN/ADMIN) for ~90% of privileged operations; single-factor compromise ⇒ full
   administrative blast radius short of the four aal2 routes.
@@ -161,7 +161,7 @@ Static review of 100% of the attack surface plus tooling checks:
 - **Vulnerability:** In the `with-route` pipeline, the body is read and parsed **before**
   authentication. `assertDeclaredBodySizeWithinLimit` only pre-checks `Content-Length`;
   chunked bodies (no CL) skip it, `request.text()` buffers the entire stream into the
-  heap, and the 1 MiB limit is applied only *after* full buffering. The code comment
+  heap, and the 1 MiB limit is applied only _after_ full buffering. The code comment
   itself concedes "hard allocation caps on chunked bodies are an infra concern … tracked
   for Phase 6". No proxy/infra body cap is configured anywhere in the repo.
 - **Affected area:** `src/server/api/with-route.ts` (`readBody`), every route with a
@@ -174,7 +174,7 @@ Static review of 100% of the attack surface plus tooling checks:
 - **Impact:** Unauthenticated remote denial of service for the entire platform; trivially
   repeatable and cheap for the attacker.
 - **Recommended fix:** Read the body through a counting stream and abort at
-  `MAX_JSON_BODY_BYTES` *during* transfer (return 413/400 envelope), before JSON parse and
+  `MAX_JSON_BODY_BYTES` _during_ transfer (return 413/400 envelope), before JSON parse and
   before auth where a body schema exists; additionally configure the hosting
   platform/reverse-proxy request-body cap as defense-in-depth.
 - **Validation method:** `curl -H 'Transfer-Encoding: chunked'` with a 2 GB stream at
@@ -213,22 +213,22 @@ Static review of 100% of the attack surface plus tooling checks:
 ### M-1 — Account-state enumeration through differentiated login failures
 
 - **Vulnerability:** Login maps GoTrue errors to distinct statuses: `403
-  INVITATION_PENDING` ("email not confirmed"), `423 ACCOUNT_SUSPENDED`, `401
-  ACCOUNT_DEACTIVATED`, vs uniform `401 INVALID_CREDENTIALS`. The code assumes the banned
+INVITATION_PENDING` ("email not confirmed"), `423 ACCOUNT_SUSPENDED`, `401
+ACCOUNT_DEACTIVATED`, vs uniform `401 INVALID_CREDENTIALS`. The code assumes the banned
   branch is reachable "only for the real account holder … never password guessing"
   (`routes-login.ts:124–127`) — but GoTrue's password grant checks `IsBanned()` **before**
   verifying the password, so `resolveBannedStatus(email)` (service-role lookup keyed on
-  email alone) fires for *any* wrong-password attempt against a banned user.
+  email alone) fires for _any_ wrong-password attempt against a banned user.
 - **Affected area:** `src/server/auth/routes-login.ts` (`mapSignInError`,
   `resolveBannedStatus`), design §13.10 "uniform login failure".
 - **Attack scenario:** Attacker posts `{email: victim, password: "x"}` for a candidate
   list; `423`/`403`/named-`401` responses reveal which addresses are platform accounts
-  *and* which are suspended/deactivated/pending — suspended admins are prime spear-phish
+  _and_ which are suspended/deactivated/pending — suspended admins are prime spear-phish
   targets ("your account was suspended, restore it here").
 - **Impact:** Target reconnaissance and account-existence/state disclosure, contradicting
   the documented enumeration-resistance control.
 - **Recommended fix:** Return byte-identical `401 INVALID_CREDENTIALS` for the banned
-  branch too (state-specific UX belongs to the *authenticated* holder via recovery/confirm
+  branch too (state-specific UX belongs to the _authenticated_ holder via recovery/confirm
   flows, which already gate correctly); keep the service-role lookup only for the audit
   row, not the response.
 - **Validation method:** Contract test + live probe: wrong password against suspended,
@@ -287,7 +287,7 @@ Static review of 100% of the attack surface plus tooling checks:
 
 ### M-4 — Recovery/invitation OTPs live 7 days
 
-- **Vulnerability:** GoTrue's single `otp_expiry = 604800` applies to *every* emailed
+- **Vulnerability:** GoTrue's single `otp_expiry = 604800` applies to _every_ emailed
   token, including password-recovery links; the design target for recovery was ~1 hour and
   `config.toml`'s own comment records this as a Phase 6 residual.
 - **Affected area:** `supabase/config.toml` `[auth] otp_expiry` (hosted-project mirror per
@@ -396,7 +396,7 @@ Static review of 100% of the attack surface plus tooling checks:
   `src/server/services/reports.ts`, `with-route.ts`.
 - **Attack scenario:** Cross-site `<img src="…/download-url">` or a link-scanner blindly
   triggers EXPORT audit rows (noise, and pollutes export analytics); the signed URL itself
-  is *not* exfiltratable (response unreadable cross-origin, URL not delivered to the
+  is _not_ exfiltratable (response unreadable cross-origin, URL not delivered to the
   browser for an img). No mutating route is currently CSRF-reachable.
 - **Impact:** Audit/telemetry noise only; latent risk if any future GET gains a real side
   effect.
@@ -420,7 +420,7 @@ Static review of 100% of the attack surface plus tooling checks:
   CSRF and transport models assume away.
 - **Impact:** Posture drift risk; today's actual flags are correct.
 - **Recommended fix:** Pass explicit `cookieOptions` (`httpOnly: true, secure: true,
-  sameSite: 'lax', path: '/'`) at both factory sites; add a unit/integration test
+sameSite: 'lax', path: '/'`) at both factory sites; add a unit/integration test
   asserting the emitted `Set-Cookie` headers from login/confirm/refresh.
 - **Validation method:** Inspect `Set-Cookie` on staging login → flags present; new test
   fails when an option is removed.
