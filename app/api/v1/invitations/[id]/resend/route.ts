@@ -24,6 +24,7 @@ const POST = withRoute({
   // knows — never to a fabricated reference.
   capability: 'invitation:update',
   tenant: ({ params }) => invitationOrganizationIdForGuard(params.id),
+  rateLimit: { class: 'sensitive' },
   summary: 're-send a pending invitation with a fresh token',
   paramSchema: z.object({ id: uuidField('id') }).strict(),
   handler: async ({ params, auth, request, requestId }) =>

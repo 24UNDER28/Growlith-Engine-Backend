@@ -18,6 +18,7 @@ const GET = withRoute({
   // path-named person), so `subjectUser` is omitted and SELF is satisfied by
   // construction; staff reach the same row through the ● cells.
   capability: 'user:update',
+  rateLimit: { class: 'sensitive' },
   summary: 'list TOTP factors for the signed-in account',
   handler: async () => listTotpFactors(),
 });

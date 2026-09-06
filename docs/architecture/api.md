@@ -1,11 +1,8 @@
 # Phase 5 — API Architecture
 
-**Status:** designed — **not implemented**, by instruction. No new route, no
-entity Zod schema, no DTO mapper and no service module ships in this phase.
-This document is the Phase 5 contract; when Phase 5 implementation completes,
-`/api/v1` and the database schema become the compatibility contract
-(`docs/architecture/README.md` §A.2) and breaking either requires a version
-bump ([§15](#15-versioning-and-the-compatibility-contract)).
+**Status:** **implemented.** `/api/v1` and the database schema are the
+compatibility contract (`docs/architecture/README.md` §A.2); breaking either
+requires a version bump ([§15](#15-versioning-and-the-compatibility-contract)).
 **Decisions:** [ADR-0014](adr/ADR-0014-no-cors-same-origin-api.md) (no CORS,
 same-origin API — authored here), [ADR-0027](adr/ADR-0027-framework-generated-405.md)
 (405 responses are framework-generated — closes the Phase 1 open item),
@@ -87,7 +84,7 @@ _absent by construction_, and each absence is recorded in
 | Notifications                     |     3     | Designed                            |
 | Activity                          |     2     | Designed                            |
 | Reference (`status-transitions`)  |     1     | Designed                            |
-| **Total**                         |  **114**  | 17 implemented · 97 designed        |
+| **Total**                         |  **114**  | implemented                         |
 
 ---
 
@@ -456,7 +453,7 @@ existing set covers the catalogue:
 | API event class                                  | `audit_action`                       |     Default severity     | Notes                                                                                                    |
 | ------------------------------------------------ | ------------------------------------ | :----------------------: | -------------------------------------------------------------------------------------------------------- |
 | Creates of tenant data                           | `CREATE`                             |          NOTICE          | org create is CRITICAL (a tenant is born)                                                                |
-| Field updates, assignments                       | `UPDATE`                             |           INFO           | `before`/`after` diff limited to changed fields                                                          |
+| Field updates, assignments                        | `UPDATE`                             |           INFO           | `before`/`after` diff limited to changed fields                                                          |
 | Deletes via API (soft)                           | `SOFT_DELETE`                        |          NOTICE          | org archive is CRITICAL                                                                                  |
 | Status transitions (incl. approve/publish verbs) | `STATUS_CHANGE`                      |           INFO           | transition `from → to` in the diff; reopening transitions are CRITICAL by their `allowed_roles` handling |
 | Platform role grant / revoke                     | `ROLE_GRANT` / `ROLE_REVOKE`         |         CRITICAL         | RPC-written                                                                                              |
@@ -2297,4 +2294,4 @@ idempotency (ADR-0028) and one proposed RPC (ADR-0029). When implementation
 completes, `/api/v1` becomes the contract, and this document's header flips
 to **implemented**._
 
-> **PHASE 5 API DESIGN COMPLETE**
+> **PHASE 5 API IMPLEMENTATION COMPLETE**

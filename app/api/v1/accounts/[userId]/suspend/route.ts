@@ -27,6 +27,7 @@ const POST = withRoute({
   capability: 'user:update',
   subjectUser: ({ params }) => params.userId,
   denialSubject: { entityKind: 'profile', id: ({ params }) => params.userId },
+  rateLimit: { class: 'sensitive' },
   summary: 'suspend an account and revoke its sessions',
   paramSchema: z.object({ userId: uuidField('userId') }).strict(),
   bodySchema: z.object({ reason: textField('reason', 500) }).strict(),

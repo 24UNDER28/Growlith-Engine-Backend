@@ -18,6 +18,7 @@ const POST = withRoute({
   // path-named person), so `subjectUser` is omitted and SELF is satisfied by
   // construction; staff reach the same row through the ● cells.
   capability: 'user:update',
+  rateLimit: { class: 'sensitive' },
   summary: 'verify a TOTP code and step the session up to aal2',
   bodySchema: mfaVerifyBodySchema,
   handler: async ({ body, auth, request, requestId }) =>

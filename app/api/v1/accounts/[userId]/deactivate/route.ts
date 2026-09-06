@@ -27,6 +27,7 @@ const POST = withRoute({
   capability: 'user:update',
   subjectUser: ({ params }) => params.userId,
   denialSubject: { entityKind: 'profile', id: ({ params }) => params.userId },
+  rateLimit: { class: 'sensitive' },
   summary: 'deactivate an account (offboarding)',
   paramSchema: z.object({ userId: uuidField('userId') }).strict(),
   bodySchema: z.object({ reason: textField('reason', 500) }).strict(),

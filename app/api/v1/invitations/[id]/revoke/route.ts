@@ -25,6 +25,7 @@ const POST = withRoute({
   // knows — never to a fabricated reference.
   capability: 'invitation:update',
   tenant: ({ params }) => invitationOrganizationIdForGuard(params.id),
+  rateLimit: { class: 'sensitive' },
   summary: 'revoke a pending invitation',
   paramSchema: z.object({ id: uuidField('id') }).strict(),
   querySchema: z.object({ reason: optionalTextField('reason', 500).optional() }).strict(),

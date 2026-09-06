@@ -26,6 +26,8 @@ const POST = withRoute({
   capability: 'user:update',
   subjectUser: ({ params }) => params.userId,
   denialSubject: { entityKind: 'profile', id: ({ params }) => params.userId },
+  minAal: 2,
+  rateLimit: { class: 'sensitive' },
   summary: 'reactivate a deactivated account (SUPER_ADMIN only)',
   paramSchema: z.object({ userId: uuidField('userId') }).strict(),
   bodySchema: z.object({ reason: textField('reason', 500) }).strict(),

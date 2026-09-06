@@ -9,10 +9,9 @@ organised as Organization → Engagement → Service → Project → Deliverable
 > ([ADR-0001](docs/architecture/adr/ADR-0001-single-nextjs-application.md)). The
 > name predates that decision; renaming is cheap now and expensive later.
 
-**Current status: Phases 1 (Architecture) and 2 (Database) complete and
-validated; Phase 3 (Authentication) fully designed.** Authorization, business
-APIs, seed data and dashboard UI are later phases and are deliberately absent
-— no stubs stand in for them.
+**Current status: Phases 1–5 are implemented.** Architecture, database, authentication,
+authorization and the `/api/v1` resource catalogue are live. Seed data, dashboard UI
+and the Phase 6 limiter/CSP work remain later phases — no stubs stand in for them.
 
 ---
 
@@ -120,9 +119,9 @@ Roles: `SUPER_ADMIN` and `ADMIN` (internal, global), `CLIENT_ADMIN` and
 | ----- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | 1     | Architecture                                             | ✅ **Complete and validated**                                                                    |
 | 2     | Database — schema, migrations, RLS, pgTAP                | ✅ **Complete** (pgTAP outstanding — risk R-3)                                                   |
-| 3     | Authentication — sessions, invites, MFA, middleware      | 📐 **Designed** — implementation next ([authentication.md](docs/architecture/authentication.md)) |
-| 4     | Authorization — capability matrix, guards, RLS hardening | Not started                                                                                      |
-| 5     | APIs — resources, services, repositories                 | Not started                                                                                      |
+| 3     | Authentication — sessions, invites, MFA, middleware      | ✅ **Implemented** ([authentication.md](docs/architecture/authentication.md)) |
+| 4     | Authorization — capability matrix, guards, RLS hardening | ✅ **Implemented** ([authorization.md](docs/architecture/authorization.md)) |
+| 5     | APIs — resources, services, repositories                 | ✅ **Implemented** ([api.md](docs/architecture/api.md)) |
 | 6     | Security — headers, rate limiting, storage, audit        | Not started                                                                                      |
 | 7     | Seed data                                                | Not started                                                                                      |
 | 8     | Testing — L4 RLS integration, L5 E2E                     | Not started                                                                                      |
@@ -135,19 +134,12 @@ previous one is validated.
 
 Stated plainly, so nothing here is mistaken for more than it is:
 
-- **No authentication or authorization is implemented.** Every route is
-  currently unauthenticated. The Phase 3 design is complete —
-  [docs/architecture/authentication.md](docs/architecture/authentication.md)
-  with [ADR-0011](docs/architecture/adr/ADR-0011-authorization-data-lives-in-postgres-not-jwt-claims.md)
-  and [ADR-0026](docs/architecture/adr/ADR-0026-server-only-session-cookies.md)
-  — but no auth code, middleware or guard exists yet; the only route is
-  `/api/v1/health`, which is intentionally public and reveals nothing.
-- **No database schema, no RLS.** Row Level Security is designed and documented,
-  not written. It cannot be proven by unit tests — only by executing SQL under a
-  real JWT (risk R-3).
-- **No business endpoints.** No stubs or fixtures stand in for them.
-- **`src/types/database.ts` declares empty collections.** That is load-bearing: a
-  typed client will not compile a query against a table that does not exist yet.
+- **Rate limiting is declared, not enforced.** Every route names a `rateLimit`
+  class; the limiter itself is Phase 6 (risk R-6).
+- **RLS is authored, not executed in this sandbox.** pgTAP remains a CI/local
+  obligation (risk R-3). Tenant isolation is still the last line of defence.
 - **No CSP or HSTS.** The baseline headers that are always safe are set; CSP and
   HSTS are Phase 6, because a CSP written before any UI exists would be either
   too loose to matter or strict enough to break Phase 9.
+- **No dashboard UI.** Phase 9 consumes `/api/v1`; nothing here anticipates a
+  component.

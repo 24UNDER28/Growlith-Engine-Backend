@@ -17,6 +17,7 @@ export const dynamic = 'force-dynamic';
 const POST = withRoute({
   method: 'POST',
   auth: 'public',
+  rateLimit: { class: 'auth' },
   summary: 'sign in with email and password',
   bodySchema: loginBodySchema,
   handler: async ({ body, request, requestId }) => performLogin({ body, request, requestId }),

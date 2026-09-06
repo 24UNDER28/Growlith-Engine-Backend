@@ -161,8 +161,13 @@ export class ApiError extends Error {
     return new ApiError(413, ErrorCode.PayloadTooLarge, message);
   }
 
-  static tooManyRequests(message = 'Too many requests. Please retry later.'): ApiError {
-    return new ApiError(429, ErrorCode.TooManyRequests, message);
+  static tooManyRequests(
+    message = 'Too many requests. Please retry later.',
+    retryAfterSeconds = 30,
+  ): ApiError {
+    return new ApiError(429, ErrorCode.TooManyRequests, message, {
+      headers: { 'Retry-After': String(retryAfterSeconds) },
+    });
   }
 
   static accountSuspended(message = 'This account is suspended.'): ApiError {
@@ -176,7 +181,9 @@ export class ApiError extends Error {
   }
 
   static serviceUnavailable(message = 'A required service is temporarily unavailable.'): ApiError {
-    return new ApiError(503, ErrorCode.ServiceUnavailable, message);
+    return new ApiError(503, ErrorCode.ServiceUnavailable, message, {
+      headers: { 'Retry-After': '5' },
+    });
   }
 
   static internal(cause?: unknown): ApiError {
