@@ -61,7 +61,6 @@ export async function listServices(input: {
       }
       return next;
     },
-    keyOf: (row) => row.created_at,
   });
   if (!staff) {
     return { data: page.data.map((row) => toServiceDto(row, false)), pagination: page.pagination };

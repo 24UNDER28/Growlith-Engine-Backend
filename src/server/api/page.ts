@@ -53,6 +53,50 @@ export function pageFromQuery(query: PaginationQuery, defaultSort = 'createdAt')
   return { limit, cursor: payload, sort };
 }
 
+/**
+ * Characters a keyset value may contain when embedded into a PostgREST
+ * `or(...)` filter. `,` and `(`/`)` are the filter grammar's structural
+ * characters — a tampered cursor whose key smuggles them could rewrite the
+ * predicate (an injection into the query's filter clause, contained by RLS
+ * but still a correctness/robustness hole), and every other character class
+ * below is what the sortable columns can actually contain: ISO-8601
+ * timestamps (`2026-01-01T00:00:00.000Z`), calendar dates, integers and
+ * decimal positions.
+ */
+const SAFE_CURSOR_KEY = /^[0-9A-Za-z:+\-.]+$/;
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Reject a decoded cursor whose values could corrupt a PostgREST `or(...)`
+ * filter into which the service interpolates them (the keyset filters in
+ * `listLive` and `listGrants`). The id is constrained to a UUID because every
+ * keyed table's primary key is a UUID and the id is embedded verbatim.
+ */
+export function assertKeysetPayloadForFilter(payload: CursorPayload): void {
+  const invalid = (): never => {
+    throw ApiError.validation(
+      [
+        {
+          path: 'cursor',
+          code: 'invalid_cursor',
+          message: 'cursor is not a cursor this system issued.',
+        },
+      ],
+      'The query string is invalid.',
+    );
+  };
+  const key = payload.key;
+  if (key !== null) {
+    const raw = typeof key === 'number' ? String(key) : key;
+    if (raw.length === 0 || raw.length > 256 || !SAFE_CURSOR_KEY.test(raw)) {
+      return invalid();
+    }
+  }
+  if (!UUID_SHAPE.test(payload.id)) {
+    return invalid();
+  }
+}
+
 export function paginationMeta(input: {
   readonly limit: number;
   readonly hasMore: boolean;

@@ -34,6 +34,8 @@ export async function listDeliverables(input: {
     table: 'deliverables',
     query: input.query,
     allowedSorts: ['createdAt', 'dueDate'],
+    // J-2: dueDate is the deadline view — soonest due first.
+    ascendingKeys: ['dueDate'],
     apply: (q) => {
       let next = q;
       if (input.query.organizationId !== undefined) next = next.eq('organization_id', input.query.organizationId);
@@ -43,7 +45,6 @@ export async function listDeliverables(input: {
       }
       return next;
     },
-    keyOf: (row) => row.created_at,
   });
   return { data: page.data.map(toDeliverableDto), pagination: page.pagination };
 }

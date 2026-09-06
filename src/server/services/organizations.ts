@@ -30,7 +30,7 @@ export async function listOrganizations(input: {
   const page = await listLive<OrgRow>({
     table: 'organizations',
     query: input.query,
-    allowedSorts: ['createdAt', 'name'],
+    allowedSorts: ['createdAt'],
     apply: (q) => {
       let next = q;
       if (input.query.status !== undefined && input.query.status.length > 0) {
@@ -46,7 +46,6 @@ export async function listOrganizations(input: {
       }
       return next;
     },
-    keyOf: (row) => row.created_at,
   });
   return { data: page.data.map(toOrganizationDto), pagination: page.pagination };
 }

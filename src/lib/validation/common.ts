@@ -82,6 +82,26 @@ export function boundedString(label: string, min: number, max: number): z.ZodStr
 }
 
 /**
+ * A free-text search term (`?q=…`). Services interpolate `q` into a
+ * PostgREST `or(...)` filter (`full_name.ilike.%q%,…`), where `,`, `(`, `)`
+ * and `"` are filter-grammar characters and control characters have no
+ * business in a name. Anything the grammar would treat as structure is
+ * rejected up front (422) so a malformed search can never reach PostgREST as
+ * a filter rewrite or a parse error; every other printable character —
+ * including PostgREST's `%`/`_` ilike wildcards — passes through unchanged.
+ */
+export function searchQueryField(label: string, max = 200): z.ZodString {
+  return z
+    .string()
+    .trim()
+    .min(1, `${label} must not be empty`)
+    .max(max, `${label} must be at most ${max} characters`)
+    .refine((value) => !/[(),"\u0000-\u001f\u007f]/.test(value), {
+      message: `${label} contains characters that are not allowed in a search`,
+    });
+}
+
+/**
  * Organization slugs appear in `/portal/[orgSlug]` and must match the
  * `organizations_slug_shape` CHECK (min 3, max 64, no leading/trailing hyphen).
  */

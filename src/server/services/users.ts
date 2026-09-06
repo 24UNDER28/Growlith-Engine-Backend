@@ -59,12 +59,47 @@ export async function listUsers(input: {
     readonly status?: readonly string[] | undefined;
     readonly userType?: string | undefined;
     readonly team?: readonly string[] | undefined;
+    readonly ids?: readonly string[] | undefined;
   };
 }): Promise<PageResult<ProfileDto>> {
+  // B-3: a client's directory is its organization's co-members plus staff
+  // identities on its work — and the client may not filter that directory by
+  // staff-only axes (account status, userType, team, free-text search) any
+  // more than it may see those columns. Such a filter on a client call would
+  // be an enumeration oracle for staff presence and staff account states,
+  // which the client audience shape (§F.1) exists to hide. Answer 422, the
+  // same as any field the client's contract does not carry.
+  if (input.auth.userType === 'CLIENT') {
+    const staffOnly = [
+      { key: 'q', value: input.query.q },
+      { key: 'status', value: input.query.status },
+      { key: 'userType', value: input.query.userType },
+      { key: 'team', value: input.query.team },
+    ].find((entry) => entry.value !== undefined);
+    if (staffOnly !== undefined) {
+      throw ApiError.validation(
+        [
+          {
+            path: staffOnly.key,
+            code: 'custom',
+            message: 'This filter is available to staff directory reads only.',
+          },
+        ],
+        'The query string is invalid.',
+      );
+    }
+  }
   let idFilter: string[] | null = null;
   const supabase = await createSupabaseServerClient();
 
-  if (input.query.organizationId !== undefined) {
+  if (input.query.ids !== undefined && input.query.ids.length > 0) {
+    // By-id directory lookup (`?ids=…`): the caller names the profiles, RLS
+    // decides which of them are visible. Deliberately NOT intersected with
+    // the organization roster below — a client resolving the staff identities
+    // attached to its own work (account managers, leads) names ids that are
+    // visible through RLS but have no organization_memberships row.
+    idFilter = [...new Set(input.query.ids)];
+  } else if (input.query.organizationId !== undefined) {
     const { data, error } = await supabase
       .from('organization_memberships')
       .select('user_id')
@@ -93,7 +128,7 @@ export async function listUsers(input: {
   const page = await listLive<ProfileRow>({
     table: 'profiles',
     query: input.query,
-    allowedSorts: ['createdAt', 'name'],
+    allowedSorts: ['createdAt'],
     apply: (q) => {
       let next = q;
       if (idFilter !== null) {
@@ -112,7 +147,6 @@ export async function listUsers(input: {
       }
       return next;
     },
-    keyOf: (row) => row.created_at,
   });
   return { data: page.data.map(toProfileDto), pagination: page.pagination };
 }

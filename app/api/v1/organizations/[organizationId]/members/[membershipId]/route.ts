@@ -22,6 +22,7 @@ const PATCH = withRoute({
   bodySchema: patchMemberBodySchema,
   handler: async ({ params, body }) =>
     patchMember({
+      organizationId: params.organizationId,
       membershipId: params.membershipId,
       role: body.role,
       status: body.status,
@@ -44,6 +45,7 @@ const DELETE = withRoute({
   bodySchema: deleteMemberBodySchema,
   handler: async ({ params, query, body }) => {
     await removeMember({
+      organizationId: params.organizationId,
       membershipId: params.membershipId,
       newPrimaryMembershipId: query.newPrimaryMembershipId,
       reason: body.reason,
