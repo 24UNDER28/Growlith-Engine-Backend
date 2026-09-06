@@ -10,7 +10,9 @@ schema reference and the ADR register for the reasoning.
 ```
 supabase/
 ├── migrations/        forward-only, hand-written, YYYYMMDDHHMMSS_name.sql  (24 files)
-├── seed.sql           synthetic local-dev data only — never production data (Rule 13)
+├── seed.sql           synthetic local-dev data only — never production data (Rule 13);
+│                      Phase 7 rewrites this file per PHASE7_SEED_DESIGN.md (design only —
+│                      implementation not started)
 ├── config.toml        local stack config                        ← Phase 3 (auth)
 └── tests/             pgTAP suites: the executable proof of RLS  ← Phase 4
 ```

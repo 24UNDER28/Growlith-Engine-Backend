@@ -9,9 +9,11 @@ organised as Organization → Engagement → Service → Project → Deliverable
 > ([ADR-0001](docs/architecture/adr/ADR-0001-single-nextjs-application.md)). The
 > name predates that decision; renaming is cheap now and expensive later.
 
-**Current status: Phases 1–5 are implemented.** Architecture, database, authentication,
-authorization and the `/api/v1` resource catalogue are live. Seed data, dashboard UI
-and the Phase 6 limiter/CSP work remain later phases — no stubs stand in for them.
+**Current status: Phases 1–6 are implemented; Phase 7 is designed.** Architecture,
+database, authentication, authorization, the `/api/v1` resource catalogue and the
+Phase 6 security hardening are live. Seed data is designed
+([PHASE7_SEED_DESIGN.md](PHASE7_SEED_DESIGN.md)) but not yet implemented; the
+dashboard UI (Phase 9) remains later — no stubs stand in for anything.
 
 ---
 
@@ -115,17 +117,17 @@ Roles: `SUPER_ADMIN` and `ADMIN` (internal, global), `CLIENT_ADMIN` and
 
 ## Phase roadmap
 
-| Phase | Scope                                                    | Status                                                                        |
-| ----- | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| 1     | Architecture                                             | ✅ **Complete and validated**                                                 |
-| 2     | Database — schema, migrations, RLS, pgTAP                | ✅ **Complete** (pgTAP outstanding — risk R-3)                                |
-| 3     | Authentication — sessions, invites, MFA, middleware      | ✅ **Implemented** ([authentication.md](docs/architecture/authentication.md)) |
-| 4     | Authorization — capability matrix, guards, RLS hardening | ✅ **Implemented** ([authorization.md](docs/architecture/authorization.md))   |
-| 5     | APIs — resources, services, repositories                 | ✅ **Implemented** ([api.md](docs/architecture/api.md))                       |
-| 6     | Security — headers, rate limiting, storage, audit        | Not started                                                                   |
-| 7     | Seed data                                                | Not started                                                                   |
-| 8     | Testing — L4 RLS integration, L5 E2E                     | Not started                                                                   |
-| 9     | Dashboard UI — admin and client                          | Not started                                                                   |
+| Phase | Scope                                                    | Status                                                                                 |
+| ----- | -------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1     | Architecture                                             | ✅ **Complete and validated**                                                          |
+| 2     | Database — schema, migrations, RLS, pgTAP                | ✅ **Complete** (pgTAP outstanding — risk R-3)                                         |
+| 3     | Authentication — sessions, invites, MFA, middleware      | ✅ **Implemented** ([authentication.md](docs/architecture/authentication.md))          |
+| 4     | Authorization — capability matrix, guards, RLS hardening | ✅ **Implemented** ([authorization.md](docs/architecture/authorization.md))            |
+| 5     | APIs — resources, services, repositories                 | ✅ **Implemented** ([api.md](docs/architecture/api.md))                                |
+| 6     | Security — headers, rate limiting, storage, audit        | Not started                                                                            |
+| 7     | Seed data                                                | **Designed** ([PHASE7_SEED_DESIGN.md](PHASE7_SEED_DESIGN.md)) — implementation pending |
+| 8     | Testing — L4 RLS integration, L5 E2E                     | Not started                                                                            |
+| 9     | Dashboard UI — admin and client                          | Not started                                                                            |
 
 Each phase must leave the repository buildable, and does not begin until the
 previous one is validated.
