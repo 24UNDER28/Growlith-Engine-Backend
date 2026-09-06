@@ -14,7 +14,10 @@ import type { PaginationQuery } from '@/lib/validation/pagination';
 type GrantRow = Database['public']['Tables']['platform_role_grants']['Row'];
 
 export async function listGrants(input: {
-  readonly query: PaginationQuery & { readonly userId?: string | undefined; readonly role?: string | undefined };
+  readonly query: PaginationQuery & {
+    readonly userId?: string | undefined;
+    readonly role?: string | undefined;
+  };
   readonly auth: AuthContext;
 }): Promise<PageResult<PlatformGrantDto>> {
   if (input.auth.platformRole === 'ADMIN') {

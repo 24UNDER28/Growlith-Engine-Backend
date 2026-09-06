@@ -9,10 +9,7 @@ import { createSupabaseServerClient } from '@/server/supabase/client-server';
  * inside the function is the caller. Authority is re-checked from the
  * database; this helper only maps the outcome.
  */
-export async function callRpc<T>(
-  fn: string,
-  args: Record<string, unknown>,
-): Promise<T> {
+export async function callRpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc(fn as never, args as never);
   if (error !== null) {

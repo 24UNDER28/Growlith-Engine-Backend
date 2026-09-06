@@ -30,7 +30,11 @@ async function toDto(row: Row | Record<string, unknown>, staff: boolean): Promis
   if (!staff) {
     return toEngagementDto(row as Parameters<typeof toEngagementDto>[0], false);
   }
-  const extra = await enrichByIds('engagements', [(row as { id: string }).id], 'contract_value, monthly_retainer, notes_internal');
+  const extra = await enrichByIds(
+    'engagements',
+    [(row as { id: string }).id],
+    'contract_value, monthly_retainer, notes_internal',
+  );
   const merged = { ...(row as object), ...(extra.get((row as { id: string }).id) ?? {}) };
   return toEngagementDto(merged as Parameters<typeof toEngagementDto>[0], true);
 }
@@ -64,7 +68,10 @@ export async function listEngagements(input: {
     },
   });
   if (!staff) {
-    return { data: page.data.map((row) => toEngagementDto(row, false)), pagination: page.pagination };
+    return {
+      data: page.data.map((row) => toEngagementDto(row, false)),
+      pagination: page.pagination,
+    };
   }
   const extra = await enrichByIds(
     'engagements',
@@ -72,9 +79,7 @@ export async function listEngagements(input: {
     'contract_value, monthly_retainer, notes_internal',
   );
   return {
-    data: page.data.map((row) =>
-      toEngagementDto({ ...row, ...(extra.get(row.id) ?? {}) }, true),
-    ),
+    data: page.data.map((row) => toEngagementDto({ ...row, ...(extra.get(row.id) ?? {}) }, true)),
     pagination: page.pagination,
   };
 }

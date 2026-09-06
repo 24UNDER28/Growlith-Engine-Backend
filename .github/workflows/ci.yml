@@ -4,11 +4,12 @@
 # Phase 1 scope: the gates that exist today — typecheck, lint, test, build, and
 # the post-build client-exposure scan.
 #
-# A second job running the Supabase CLI under Docker (migrate → seed → pgTAP RLS
-# tests) is added in Phase 2, when there are migrations to run. It is not stubbed
-# here, because a job that cannot pass is not a gate (Rule 14). It matters
-# because RLS cannot be proven by unit tests: executing those policies in CI is
-# the only way tenant isolation is ever actually verified (risk R-3).
+# Phase 6 scope: the security gates — secret scan, dependency audit, and the
+# database authorization harness. The harness applies every migration to an
+# in-memory PostgreSQL (PGlite, no Docker or Supabase CLI needed) and replays
+# the cross-tenant attack set. It is a BLOCKING step: RLS cannot be proven by
+# unit tests, so executing those policies in CI is the only way tenant
+# isolation is ever actually verified (risk R-3, audit finding H-3).
 #
 # No environment secrets are required. Configuration is parsed lazily and only at
 # first use (ADR-0023), so `next build` succeeds without them — which is what
@@ -81,8 +82,12 @@ jobs:
         run: npm audit --audit-level=moderate
 
       - name: Database authorization harness (H-3, PGlite)
+        # Blocking gate: applies every supabase/migrations/*.sql to an in-memory
+        # PostgreSQL (PGlite, pinned exact in package.json) and replays 91
+        # cross-tenant / privilege / storage attacks as six seeded actors. A
+        # single RLS policy regression fails this step (validated by mutation:
+        # opening `files_select_client` to `using (true)` fails 2 checks).
         run: node scripts/db-authz-attack.mjs
-        continue-on-error: true
 
       - name: Confirm the working tree is still clean
         # Catches a build or generator that silently rewrites tracked files —

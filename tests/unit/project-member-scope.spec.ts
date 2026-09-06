@@ -114,7 +114,11 @@ describe('project membership object-scope enforcement', () => {
 
   it('patchProjectMember allows a membership of the project named in the path', async () => {
     crudMock.loadLive.mockResolvedValue({ ...MEMBERSHIP_ROW, project_id: 'p-1' });
-    crudMock.updateLive.mockResolvedValue({ ...MEMBERSHIP_ROW, project_id: 'p-1', project_role: 'LEAD' });
+    crudMock.updateLive.mockResolvedValue({
+      ...MEMBERSHIP_ROW,
+      project_id: 'p-1',
+      project_role: 'LEAD',
+    });
 
     await expect(
       patchProjectMember({

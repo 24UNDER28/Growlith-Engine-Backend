@@ -39,13 +39,16 @@ export async function listTasks(input: {
     ascendingKeys: ['dueDate', 'position'],
     apply: (q) => {
       let next = q;
-      if (input.query.organizationId !== undefined) next = next.eq('organization_id', input.query.organizationId);
+      if (input.query.organizationId !== undefined)
+        next = next.eq('organization_id', input.query.organizationId);
       if (input.query.projectId !== undefined) next = next.eq('project_id', input.query.projectId);
-      if (input.query.deliverableId !== undefined) next = next.eq('deliverable_id', input.query.deliverableId);
+      if (input.query.deliverableId !== undefined)
+        next = next.eq('deliverable_id', input.query.deliverableId);
       if (input.query.status !== undefined && input.query.status.length > 0) {
         next = next.in('status', [...input.query.status]);
       }
-      if (input.query.assigneeUserId !== undefined) next = next.eq('assignee_user_id', input.query.assigneeUserId);
+      if (input.query.assigneeUserId !== undefined)
+        next = next.eq('assignee_user_id', input.query.assigneeUserId);
       return next;
     },
   });

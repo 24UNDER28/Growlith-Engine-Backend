@@ -141,9 +141,7 @@ export async function listUsers(input: {
         next = next.eq('user_type', input.query.userType);
       }
       if (input.query.q !== undefined) {
-        next = next.or(
-          `full_name.ilike.%${input.query.q}%,email.ilike.%${input.query.q}%`,
-        );
+        next = next.or(`full_name.ilike.%${input.query.q}%,email.ilike.%${input.query.q}%`);
       }
       return next;
     },
@@ -202,7 +200,10 @@ export async function patchUser(input: {
   return toProfileDto(updated);
 }
 
-export async function eraseUser(input: { readonly userId: string; readonly reason: string }): Promise<void> {
+export async function eraseUser(input: {
+  readonly userId: string;
+  readonly reason: string;
+}): Promise<void> {
   // Last-SUPER_ADMIN lockout: the RPC tombstones grants without this floor.
   // JUSTIFIED: ADMIN cannot SELECT the grant roster; the check must see every
   // live SUPER_ADMIN row.

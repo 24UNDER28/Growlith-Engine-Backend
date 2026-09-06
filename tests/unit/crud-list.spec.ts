@@ -35,11 +35,25 @@ function makeChain(rows: readonly Record<string, unknown>[]): {
 } {
   const events: ChainEvent[] = [];
   const chain: Record<string, unknown> = {};
-  const push = (op: string) => (...args: unknown[]) => {
-    events.push({ op, args });
-    return chain;
-  };
-  for (const op of ['select', 'eq', 'is', 'in', 'gte', 'lte', 'lt', 'or', 'ilike', 'order', 'limit']) {
+  const push =
+    (op: string) =>
+    (...args: unknown[]) => {
+      events.push({ op, args });
+      return chain;
+    };
+  for (const op of [
+    'select',
+    'eq',
+    'is',
+    'in',
+    'gte',
+    'lte',
+    'lt',
+    'or',
+    'ilike',
+    'order',
+    'limit',
+  ]) {
     chain[op] = push(op);
   }
   chain.then = (
@@ -208,9 +222,7 @@ describe('listLive keyset pagination', () => {
   });
 
   it('orders ASCENDING keys with an id tie-break in the same direction', async () => {
-    const rows = Array.from({ length: 26 }, (_, index) =>
-      row(uuid(index), iso(index), null),
-    );
+    const rows = Array.from({ length: 26 }, (_, index) => row(uuid(index), iso(index), null));
     const fake = makeChain(rows);
     clientMock.mockResolvedValue({ from: fake.from });
 

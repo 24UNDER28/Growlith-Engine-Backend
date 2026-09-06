@@ -45,7 +45,8 @@ export async function listProjects(input: {
     ascendingKeys: ['targetDate'],
     apply: (q) => {
       let next = q;
-      if (input.query.organizationId !== undefined) next = next.eq('organization_id', input.query.organizationId);
+      if (input.query.organizationId !== undefined)
+        next = next.eq('organization_id', input.query.organizationId);
       if (input.query.serviceId !== undefined) next = next.eq('service_id', input.query.serviceId);
       if (input.query.status !== undefined && input.query.status.length > 0) {
         next = next.in('status', [...input.query.status]);

@@ -59,9 +59,9 @@ describe('createReportBodySchema cross-field validation (K-1)', () => {
 
   it('accepts periodEnd == periodStart and periodEnd > periodStart', () => {
     expect(createReportBodySchema.safeParse(base).success).toBe(true);
-    expect(
-      createReportBodySchema.safeParse({ ...base, periodEnd: '2026-09-01' }).success,
-    ).toBe(true);
+    expect(createReportBodySchema.safeParse({ ...base, periodEnd: '2026-09-01' }).success).toBe(
+      true,
+    );
   });
 
   it('rejects periodEnd < periodStart', () => {

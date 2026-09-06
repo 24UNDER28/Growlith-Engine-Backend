@@ -57,9 +57,11 @@ export async function listComments(input: {
     allowedSorts: ['createdAt'],
     apply: (q) => {
       let next = q;
-      if (input.query.organizationId !== undefined) next = next.eq('organization_id', input.query.organizationId);
+      if (input.query.organizationId !== undefined)
+        next = next.eq('organization_id', input.query.organizationId);
       if (input.query.projectId !== undefined) next = next.eq('project_id', input.query.projectId);
-      if (input.query.deliverableId !== undefined) next = next.eq('deliverable_id', input.query.deliverableId);
+      if (input.query.deliverableId !== undefined)
+        next = next.eq('deliverable_id', input.query.deliverableId);
       if (input.query.taskId !== undefined) next = next.eq('task_id', input.query.taskId);
       return next;
     },
@@ -95,7 +97,11 @@ export async function createComment(input: {
   );
   if (subjects.length !== 1) {
     throw ApiError.validation([
-      { path: '(root)', code: 'custom', message: 'Exactly one of projectId, deliverableId or taskId is required.' },
+      {
+        path: '(root)',
+        code: 'custom',
+        message: 'Exactly one of projectId, deliverableId or taskId is required.',
+      },
     ]);
   }
   const table = input.body.projectId
@@ -103,7 +109,9 @@ export async function createComment(input: {
     : input.body.deliverableId
       ? 'deliverables'
       : 'tasks';
-  const subjectId = (input.body.projectId ?? input.body.deliverableId ?? input.body.taskId) as string;
+  const subjectId = (input.body.projectId ??
+    input.body.deliverableId ??
+    input.body.taskId) as string;
   const parent = await loadLive<{ organization_id: string }>(table, subjectId);
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase

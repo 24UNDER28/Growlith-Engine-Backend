@@ -44,13 +44,7 @@ export type EngagementStatus = (typeof ENGAGEMENT_STATUSES)[number];
 export const FEE_MODELS = ['RETAINER', 'FIXED', 'HOURLY', 'PERFORMANCE'] as const;
 export type FeeModel = (typeof FEE_MODELS)[number];
 
-export const SERVICE_STATUSES = [
-  'PLANNED',
-  'ACTIVE',
-  'PAUSED',
-  'COMPLETED',
-  'CANCELLED',
-] as const;
+export const SERVICE_STATUSES = ['PLANNED', 'ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED'] as const;
 export type ServiceStatus = (typeof SERVICE_STATUSES)[number];
 
 export const PROJECT_STATUSES = [

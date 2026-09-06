@@ -153,14 +153,18 @@ export const patchMeBodySchema = z
 export const usersListQuerySchema = paginationQuerySchema.extend({
   q: searchQueryField('q').optional(),
   organizationId: uuidField('organizationId').optional(),
-  status: csvField(enumField('status', ['INVITED', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED'])).optional(),
+  status: csvField(
+    enumField('status', ['INVITED', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED']),
+  ).optional(),
   userType: enumField('userType', ['INTERNAL', 'CLIENT']).optional(),
   team: csvField(enumField('team', INTERNAL_TEAMS)).optional(),
   ids: csvField(uuidField('ids'), 50).optional(),
 });
 
 export const membersListQuerySchema = paginationQuerySchema.extend({
-  status: csvField(enumField('status', ['INVITED', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED'])).optional(),
+  status: csvField(
+    enumField('status', ['INVITED', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED']),
+  ).optional(),
   role: csvField(enumField('role', ORGANIZATION_ROLES)).optional(),
 });
 
@@ -500,9 +504,7 @@ export const patchReportBodySchema = z
   })
   .strict();
 
-export const publishReportBodySchema = z
-  .object({ clientVisible: z.boolean().optional() })
-  .strict();
+export const publishReportBodySchema = z.object({ clientVisible: z.boolean().optional() }).strict();
 
 export const metricListQuerySchema = paginationQuerySchema.extend({
   organizationId: uuidField('organizationId').optional(),
@@ -540,7 +542,11 @@ export const uploadUrlBodySchema = z
     organizationId: uuidField('organizationId').optional(),
     fileName: textField('fileName', 255),
     mimeType: textField('mimeType', 127),
-    sizeBytes: z.number().int().positive().max(500 * 1024 * 1024),
+    sizeBytes: z
+      .number()
+      .int()
+      .positive()
+      .max(500 * 1024 * 1024),
     fileKind: enumField('fileKind', FILE_KINDS).optional(),
     projectId: uuidField('projectId').optional(),
     deliverableId: uuidField('deliverableId').optional(),

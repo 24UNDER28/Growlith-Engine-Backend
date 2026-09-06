@@ -14,7 +14,10 @@ type Row = Database['public']['Tables']['notifications']['Row'];
 
 export async function listNotifications(input: {
   readonly auth: AuthContext;
-  readonly query: PaginationQuery & { readonly unread?: boolean | undefined; readonly archived?: boolean | undefined };
+  readonly query: PaginationQuery & {
+    readonly unread?: boolean | undefined;
+    readonly archived?: boolean | undefined;
+  };
 }): Promise<PageResult<NotificationDto>> {
   const page = await listLive<Row>({
     table: 'notifications',

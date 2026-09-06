@@ -1,6 +1,10 @@
 import { withRoute } from '@/server/api/with-route';
 import { tenantFromRow } from '@/server/api/tenant';
-import { deleteDeliverable, getDeliverable, patchDeliverable } from '@/server/services/deliverables';
+import {
+  deleteDeliverable,
+  getDeliverable,
+  patchDeliverable,
+} from '@/server/services/deliverables';
 import { idParamSchema, patchDeliverableBodySchema } from '@/lib/validation/resources';
 
 export const runtime = 'nodejs';

@@ -199,7 +199,14 @@ export async function challengeAndVerifyTotp(input: {
   });
 
   if (challengeError !== null || challenge === null) {
-    await auditMfaFailure(input.auth, input.request, input.requestId, 'challenge', challengeError, log);
+    await auditMfaFailure(
+      input.auth,
+      input.request,
+      input.requestId,
+      'challenge',
+      challengeError,
+      log,
+    );
     throw mapMfaError(challengeError, 'challenge', log, input.auth, input.request, input.requestId);
   }
 
@@ -264,7 +271,14 @@ export async function listTotpFactors(): Promise<MfaFactorSummary[]> {
   const { data, error } = await supabase.auth.mfa.listFactors();
 
   if (error !== null || data === null) {
-    throw mapMfaError(error, 'listFactors', createLogger({ scope: 'auth-mfa' }), null as unknown as AuthContext, undefined as unknown as Request, 'unknown');
+    throw mapMfaError(
+      error,
+      'listFactors',
+      createLogger({ scope: 'auth-mfa' }),
+      null as unknown as AuthContext,
+      undefined as unknown as Request,
+      'unknown',
+    );
   }
 
   return data.totp.map((factor) => ({

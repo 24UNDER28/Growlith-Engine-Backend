@@ -23,8 +23,7 @@ const PATCH = withRoute({
   summary: 'mark a notification read or archived',
   paramSchema: idParamSchema,
   bodySchema: patchNotificationBodySchema,
-  handler: async ({ params, body, auth }) =>
-    patchNotification({ id: params.id, auth, body }),
+  handler: async ({ params, body, auth }) => patchNotification({ id: params.id, auth, body }),
 });
 
 export { GET, PATCH };

@@ -58,7 +58,9 @@ describe('Phase 6 — M-3 storage path validation', () => {
 
   it('rejects wrong org prefix', () => {
     const otherOrg = '33333333-3333-4333-8333-333333333333';
-    expect(() => validateStoragePath(`${otherOrg}/attachment/${uuid}/my-file.pdf`, orgId)).toThrow();
+    expect(() =>
+      validateStoragePath(`${otherOrg}/attachment/${uuid}/my-file.pdf`, orgId),
+    ).toThrow();
   });
 
   it('rejects malformed shape', () => {

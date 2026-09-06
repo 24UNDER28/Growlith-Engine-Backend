@@ -36,8 +36,10 @@ export async function listReports(input: {
     allowedSorts: ['createdAt'],
     apply: (q) => {
       let next = q;
-      if (input.query.organizationId !== undefined) next = next.eq('organization_id', input.query.organizationId);
-      if (input.query.engagementId !== undefined) next = next.eq('engagement_id', input.query.engagementId);
+      if (input.query.organizationId !== undefined)
+        next = next.eq('organization_id', input.query.organizationId);
+      if (input.query.engagementId !== undefined)
+        next = next.eq('engagement_id', input.query.engagementId);
       if (input.query.serviceId !== undefined) next = next.eq('service_id', input.query.serviceId);
       if (input.query.status !== undefined && input.query.status.length > 0) {
         next = next.in('status', [...input.query.status]);
@@ -102,7 +104,9 @@ export async function downloadReportExport(input: {
   }
   const signed = await supabase.storage
     .from(data.storage_bucket)
-    .createSignedUrl(data.storage_path, 60, { download: `${report.title.replace(/[^A-Za-z0-9._-]+/g, '-')}.pdf` });
+    .createSignedUrl(data.storage_path, 60, {
+      download: `${report.title.replace(/[^A-Za-z0-9._-]+/g, '-')}.pdf`,
+    });
   if (signed.error !== null || signed.data === null) {
     throw ApiError.serviceUnavailable('A signed download URL could not be minted.');
   }
@@ -301,7 +305,8 @@ export async function listMetrics(input: {
     allowedSorts: ['createdAt', 'metricDate'],
     apply: (q) => {
       let next = q;
-      if (input.query.organizationId !== undefined) next = next.eq('organization_id', input.query.organizationId);
+      if (input.query.organizationId !== undefined)
+        next = next.eq('organization_id', input.query.organizationId);
       if (input.query.serviceId !== undefined) next = next.eq('service_id', input.query.serviceId);
       if (input.query.metricKey !== undefined && input.query.metricKey.length > 0) {
         next = next.in('metric_key', [...input.query.metricKey]);

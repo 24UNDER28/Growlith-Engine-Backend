@@ -1,5 +1,9 @@
 import { withRoute } from '@/server/api/with-route';
-import { createComment, listComments, resolveCommentSubjectTenant } from '@/server/services/comments';
+import {
+  createComment,
+  listComments,
+  resolveCommentSubjectTenant,
+} from '@/server/services/comments';
 import { commentListQuerySchema, createCommentBodySchema } from '@/lib/validation/resources';
 
 export const runtime = 'nodejs';

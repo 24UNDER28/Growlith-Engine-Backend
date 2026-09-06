@@ -38,7 +38,8 @@ export async function listDeliverables(input: {
     ascendingKeys: ['dueDate'],
     apply: (q) => {
       let next = q;
-      if (input.query.organizationId !== undefined) next = next.eq('organization_id', input.query.organizationId);
+      if (input.query.organizationId !== undefined)
+        next = next.eq('organization_id', input.query.organizationId);
       if (input.query.projectId !== undefined) next = next.eq('project_id', input.query.projectId);
       if (input.query.status !== undefined && input.query.status.length > 0) {
         next = next.in('status', [...input.query.status]);
